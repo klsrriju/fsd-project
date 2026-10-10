@@ -1,19 +1,13 @@
-import { Pool } from 'pg';
+import mongoose from 'mongoose';
 import { config } from './env';
 
-export const db = new Pool({
-  host: config.postgres.host,
-  port: config.postgres.port,
-  user: config.postgres.user,
-  password: config.postgres.password,
-  database: config.postgres.database
-});
-
-export async function initDatabase() {
+export async function connectMongoDB(): Promise<void> {
   try {
-    await db.query('SELECT 1');
-    console.log('PostgreSQL connected');
+    mongoose.set('strictQuery', false);
+    await mongoose.connect(config.mongodbUri);
+    console.log('✅ Connected to MongoDB Atlas (fsdproject)');
   } catch (error) {
-    console.warn('PostgreSQL not available yet:', error);
+    console.error('❌ MongoDB Atlas connection error:', error);
+    process.exit(1);
   }
 }

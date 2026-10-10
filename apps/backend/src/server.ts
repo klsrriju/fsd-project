@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import { config } from './config/env';
+import { connectMongoDB } from './config/database';
+import { seedMongoDB } from './db/seedMongo';
 import { initRedis } from './config/redis';
 import v1Router from './routes/v1';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -14,7 +16,7 @@ app.disable('x-powered-by');
 
 // Root
 app.get('/', (_req, res) => {
-  res.json({ success: true, message: 'AI Recruitment Platform API', version: '1.0.0' });
+  res.json({ success: true, message: 'AI Recruitment Platform API (MongoDB Atlas)', version: '1.0.0' });
 });
 
 // API v1 routes
@@ -27,13 +29,18 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 async function start() {
-  // Start server immediately (Redis/DB are optional)
+  // 1. Connect to MongoDB Atlas & Seed initial data
+  await connectMongoDB();
+  await seedMongoDB();
+
+  // 2. Start Express HTTP Server
   app.listen(config.port, () => {
     console.log(`✅ Recruitment backend running at http://localhost:${config.port}`);
     console.log(`📚 API available at http://localhost:${config.port}/api/v1`);
+    console.log(`🍃 Connected & operational on MongoDB Atlas Cluster: fsdproject`);
   });
 
-  // Try Redis in background (non-blocking)
+  // 3. Try Redis in background (non-blocking)
   initRedis().catch((err) => console.warn('⚠️  Redis unavailable (cache disabled):', err.message));
 }
 

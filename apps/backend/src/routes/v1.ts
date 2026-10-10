@@ -2,10 +2,9 @@ import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import {
-  users, jobs, applications, interviews, notifications,
-  computeMatchScore, generateResumeFeedback,
-  User, Job, Application, Interview, Notification
-} from '../data/demoData';
+  UserModel, JobModel, ApplicationModel, InterviewModel, NotificationModel
+} from '../models/mongoModels';
+import { computeMatchScore, generateResumeFeedback } from '../data/demoData';
 import { config } from '../config/env';
 
 const router = Router();
@@ -17,7 +16,7 @@ function ok(message: string, data?: unknown) {
 function fail(message: string, error?: string) {
   return { success: false, message, error };
 }
-function signToken(user: User) {
+function signToken(user: any) {
   return jwt.sign({ id: user.id, email: user.email, role: user.role, name: user.name }, config.jwtSecret, { expiresIn: '24h' });
 }
 function authenticate(req: Request, res: Response, next: Function) {
@@ -40,561 +39,663 @@ function requireCandidate(req: Request, res: Response, next: Function) {
   next();
 }
 
+// Helper to format user object safely
+function sanitizeUser(user: any) {
+  const obj = user.toObject ? user.toObject() : { ...user };
+  delete obj._id;
+  delete obj.__v;
+  delete obj.password;
+  return obj;
+}
+
+function cleanDoc(doc: any) {
+  const obj = doc.toObject ? doc.toObject() : { ...doc };
+  delete obj._id;
+  delete obj.__v;
+  return obj;
+}
+
 // ─── HEALTH ───────────────────────────────────────────────────────────────────
 router.get('/health', (_req, res) => {
-  res.json(ok('API is running', { version: '1.0.0', timestamp: new Date().toISOString() }));
+  res.json(ok('API is running (MongoDB Atlas Connected)', { version: '1.0.0', database: 'MongoDB Atlas', timestamp: new Date().toISOString() }));
 });
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
-router.post('/auth/login', (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json(fail('Email and password required'));
+router.post('/auth/login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json(fail('Email and password required'));
 
-  const user = users.find((u) => u.email === email);
-  if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
-    return res.status(401).json(fail('Invalid credentials'));
+    const user = await UserModel.findOne({ email });
+    if (!user || !bcrypt.compareSync(password, user.password)) {
+      return res.status(401).json(fail('Invalid credentials'));
+    }
+
+    const token = signToken(user);
+    return res.json(ok('Login successful', { token, user: sanitizeUser(user) }));
+  } catch (err: any) {
+    return res.status(500).json(fail('Internal server error', err.message));
   }
-
-  const token = signToken(user);
-  const { passwordHash, ...safeUser } = user;
-  return res.json(ok('Login successful', { token, user: safeUser }));
 });
 
-router.post('/auth/register', (req: Request, res: Response) => {
-  const { email, password, role, name, ...rest } = req.body;
-  if (!email || !password || !role || !name) {
-    return res.status(400).json(fail('Email, password, role, and name are required'));
-  }
-  if (!['hr', 'candidate'].includes(role)) {
-    return res.status(400).json(fail('Role must be hr or candidate'));
-  }
-  if (users.find((u) => u.email === email)) {
-    return res.status(409).json(fail('Email already registered'));
-  }
+router.post('/auth/register', async (req: Request, res: Response) => {
+  try {
+    const { email, password, role, name, ...rest } = req.body;
+    if (!email || !password || !role || !name) {
+      return res.status(400).json(fail('Email, password, role, and name are required'));
+    }
+    if (!['hr', 'candidate'].includes(role)) {
+      return res.status(400).json(fail('Role must be hr or candidate'));
+    }
 
-  const newUser: User = {
-    id: `${role}-${Date.now()}`,
-    email,
-    passwordHash: bcrypt.hashSync(password, 10),
-    role,
-    name,
-    createdAt: new Date().toISOString(),
-    ...rest,
-  };
-  users.push(newUser);
+    const existing = await UserModel.findOne({ email });
+    if (existing) {
+      return res.status(409).json(fail('Email already registered'));
+    }
 
-  const token = signToken(newUser);
-  const { passwordHash, ...safeUser } = newUser;
-  return res.status(201).json(ok('Account created successfully', { token, user: safeUser }));
+    const newUser = await UserModel.create({
+      id: `${role}-${Date.now()}`,
+      email,
+      password: bcrypt.hashSync(password, 10),
+      role,
+      name,
+      createdAt: new Date(),
+      ...rest,
+    });
+
+    const token = signToken(newUser);
+    return res.status(201).json(ok('Account created successfully', { token, user: sanitizeUser(newUser) }));
+  } catch (err: any) {
+    return res.status(500).json(fail('Failed to create account', err.message));
+  }
 });
 
-router.get('/auth/me', authenticate, (req: Request, res: Response) => {
-  const userId = (req as any).user.id;
-  const user = users.find((u) => u.id === userId);
-  if (!user) return res.status(404).json(fail('User not found'));
-  const { passwordHash, ...safeUser } = user;
-  res.json(ok('Profile retrieved', safeUser));
+router.get('/auth/me', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const user = await UserModel.findOne({ id: userId });
+    if (!user) return res.status(404).json(fail('User not found'));
+    res.json(ok('Profile retrieved', sanitizeUser(user)));
+  } catch (err: any) {
+    res.status(500).json(fail('Error fetching user', err.message));
+  }
 });
 
-router.patch('/auth/profile', authenticate, (req: Request, res: Response) => {
-  const userId = (req as any).user.id;
-  const idx = users.findIndex((u) => u.id === userId);
-  if (idx === -1) return res.status(404).json(fail('User not found'));
-  const { passwordHash, id, email, role, ...updates } = req.body;
-  Object.assign(users[idx], updates);
-  const { passwordHash: _pw, ...safeUser } = users[idx];
-  res.json(ok('Profile updated', safeUser));
+router.patch('/auth/profile', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const user = await UserModel.findOne({ id: userId });
+    if (!user) return res.status(404).json(fail('User not found'));
+
+    const updates = { ...req.body };
+    delete updates.id;
+    delete updates.email;
+    delete updates.role;
+    delete updates.password;
+
+    Object.assign(user, updates);
+    await user.save();
+    res.json(ok('Profile updated', sanitizeUser(user)));
+  } catch (err: any) {
+    res.status(500).json(fail('Error updating profile', err.message));
+  }
 });
 
 // ─── JOBS ─────────────────────────────────────────────────────────────────────
-router.get('/jobs', (req: Request, res: Response) => {
-  const { search, type, industry, status = 'active' } = req.query as Record<string, string>;
-  let result = jobs.filter((j) => j.status === (status || 'active'));
-  if (search) result = result.filter((j) => j.title.toLowerCase().includes(search.toLowerCase()) || j.description.toLowerCase().includes(search.toLowerCase()));
-  if (type) result = result.filter((j) => j.type === type);
-  if (industry) result = result.filter((j) => j.industry === industry);
-  res.json(ok('Jobs retrieved', result));
-});
+router.get('/jobs', async (req: Request, res: Response) => {
+  try {
+    const { search, type, location, industry, status } = req.query;
+    const query: any = {};
 
-router.get('/jobs/:id', (req: Request, res: Response) => {
-  const job = jobs.find((j) => j.id === req.params.id);
-  if (!job) return res.status(404).json(fail('Job not found'));
-  res.json(ok('Job retrieved', job));
-});
+    if (status) query.status = status;
+    else query.status = 'active';
 
-router.post('/jobs', authenticate, requireHR, (req: Request, res: Response) => {
-  const hrId = (req as any).user.id;
-  const hr = users.find((u) => u.id === hrId);
-  const newJob: Job = {
-    id: `job-${Date.now()}`,
-    hrId,
-    company: hr?.company || 'Unknown',
-    industry: hr?.industry || 'Technology',
-    applicantsCount: 0,
-    status: 'active',
-    createdAt: new Date().toISOString(),
-    ...req.body,
-  };
-  jobs.push(newJob);
+    if (type) query.type = type;
+    if (industry) query.industry = industry;
 
-  // Notify matching candidates
-  users.filter((u) => u.role === 'candidate').forEach((candidate) => {
-    if (!candidate.skills) return;
-    const { score } = computeMatchScore(candidate.skills, newJob.skills, newJob.requirements);
-    if (score >= 60) {
-      notifications.push({
-        id: `notif-${Date.now()}-${candidate.id}`,
-        userId: candidate.id,
-        type: 'job_match',
-        title: `New Job Match: ${newJob.title}`,
-        message: `A new position "${newJob.title}" at ${newJob.company} matches your profile with ${score}% compatibility.`,
-        read: false,
-        createdAt: new Date().toISOString(),
-        jobId: newJob.id,
-      });
+    if (search) {
+      const regex = new RegExp(String(search), 'i');
+      query.$or = [{ title: regex }, { company: regex }, { skills: regex }, { description: regex }];
     }
-  });
 
-  res.status(201).json(ok('Job created', newJob));
+    const jobDocs = await JobModel.find(query).sort({ createdAt: -1 });
+    const formattedJobs = jobDocs.map(cleanDoc);
+
+    res.json(ok('Jobs retrieved', formattedJobs));
+  } catch (err: any) {
+    res.status(500).json(fail('Error fetching jobs', err.message));
+  }
 });
 
-router.patch('/jobs/:id', authenticate, requireHR, (req: Request, res: Response) => {
-  const idx = jobs.findIndex((j) => j.id === req.params.id && j.hrId === (req as any).user.id);
-  if (idx === -1) return res.status(404).json(fail('Job not found or unauthorized'));
-  Object.assign(jobs[idx], req.body);
-  res.json(ok('Job updated', jobs[idx]));
+router.get('/jobs/:id', async (req: Request, res: Response) => {
+  try {
+    const job = await JobModel.findOne({ id: req.params.id });
+    if (!job) return res.status(404).json(fail('Job not found'));
+    res.json(ok('Job retrieved', cleanDoc(job)));
+  } catch (err: any) {
+    res.status(500).json(fail('Error fetching job', err.message));
+  }
 });
 
-router.delete('/jobs/:id', authenticate, requireHR, (req: Request, res: Response) => {
-  const idx = jobs.findIndex((j) => j.id === req.params.id && j.hrId === (req as any).user.id);
-  if (idx === -1) return res.status(404).json(fail('Job not found or unauthorized'));
-  jobs[idx].status = 'closed';
-  res.json(ok('Job closed'));
+router.post('/jobs', authenticate, requireHR, async (req: Request, res: Response) => {
+  try {
+    const hrId = (req as any).user.id;
+    const hrUser = await UserModel.findOne({ id: hrId });
+
+    const { title, description, requirements, skills, location, type, salary, experience, degree, industry } = req.body;
+    if (!title || !description || !skills?.length) {
+      return res.status(400).json(fail('Title, description, and skills are required'));
+    }
+
+    const newJob = await JobModel.create({
+      id: `job-${Date.now()}`,
+      hrId,
+      title,
+      company: hrUser?.company || 'Company',
+      location: location || 'Remote',
+      type: type || 'full-time',
+      salary: salary || 'Negotiable',
+      description,
+      requirements: Array.isArray(requirements) ? requirements : (requirements ? [requirements] : []),
+      skills: Array.isArray(skills) ? skills : [skills],
+      experience: experience || 'Not specified',
+      degree: degree || '',
+      status: 'active',
+      createdAt: new Date(),
+      applicantsCount: 0,
+      industry: industry || hrUser?.industry || 'Technology',
+    });
+
+    // Smart notification: Notify matching candidates
+    const candidates = await UserModel.find({ role: 'candidate' });
+    const jobSkillsLower = newJob.skills.map(s => s.toLowerCase());
+
+    for (const cand of candidates) {
+      if (cand.skills?.some(s => jobSkillsLower.includes(s.toLowerCase()))) {
+        await NotificationModel.create({
+          id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          userId: cand.id,
+          type: 'job_match',
+          title: `New Job Match: ${newJob.title}`,
+          message: `${newJob.company} is hiring for ${newJob.title} in ${newJob.location}. Fits your skills!`,
+          read: false,
+          createdAt: new Date(),
+          metadata: { jobId: newJob.id },
+        });
+      }
+    }
+
+    res.status(201).json(ok('Job created successfully and matching candidates notified', cleanDoc(newJob)));
+  } catch (err: any) {
+    res.status(500).json(fail('Error creating job', err.message));
+  }
+});
+
+router.patch('/jobs/:id', authenticate, requireHR, async (req: Request, res: Response) => {
+  try {
+    const job = await JobModel.findOne({ id: req.params.id, hrId: (req as any).user.id });
+    if (!job) return res.status(404).json(fail('Job not found or access denied'));
+
+    Object.assign(job, req.body);
+    await job.save();
+    res.json(ok('Job updated', cleanDoc(job)));
+  } catch (err: any) {
+    res.status(500).json(fail('Error updating job', err.message));
+  }
+});
+
+router.delete('/jobs/:id', authenticate, requireHR, async (req: Request, res: Response) => {
+  try {
+    const job = await JobModel.findOne({ id: req.params.id, hrId: (req as any).user.id });
+    if (!job) return res.status(404).json(fail('Job not found or access denied'));
+
+    job.status = 'closed';
+    await job.save();
+    res.json(ok('Job closed successfully'));
+  } catch (err: any) {
+    res.status(500).json(fail('Error closing job', err.message));
+  }
+});
+
+// AI Candidate Rankings for a Job
+router.get('/jobs/:id/candidates', authenticate, requireHR, async (req: Request, res: Response) => {
+  try {
+    const job = await JobModel.findOne({ id: req.params.id });
+    if (!job) return res.status(404).json(fail('Job not found'));
+
+    const candidates = await UserModel.find({ role: 'candidate' });
+    const jobApps = await ApplicationModel.find({ jobId: job.id });
+
+    const ranked = candidates.map((cand) => {
+      const candObj = sanitizeUser(cand);
+      const app = jobApps.find((a) => a.candidateId === cand.id);
+      const { score, matched, missing } = computeMatchScore(candObj.skills || [], job.skills || [], job.requirements || []);
+      return {
+        candidate: candObj,
+        matchScore: app ? app.matchScore : score,
+        matchedSkills: app ? app.matchedSkills : matched,
+        missingSkills: app ? app.missingSkills : missing,
+        application: app ? cleanDoc(app) : null,
+      };
+    }).sort((a, b) => b.matchScore - a.matchScore);
+
+    res.json(ok('Ranked candidates', ranked));
+  } catch (err: any) {
+    res.status(500).json(fail('Error fetching candidate rankings', err.message));
+  }
 });
 
 // ─── APPLICATIONS ─────────────────────────────────────────────────────────────
-router.get('/applications', authenticate, (req: Request, res: Response) => {
-  const user = (req as any).user;
-  let result = applications;
-  if (user.role === 'hr') {
-    result = applications.filter((a) => a.hrId === user.id);
-    const { jobId, status } = req.query as Record<string, string>;
-    if (jobId) result = result.filter((a) => a.jobId === jobId);
-    if (status) result = result.filter((a) => a.status === status);
-  } else {
-    result = applications.filter((a) => a.candidateId === user.id);
-  }
+router.get('/applications', authenticate, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    let appsDocs: any[] = [];
 
-  // Enrich with candidate and job info
-  const enriched = result.map((app) => {
-    const candidate = users.find((u) => u.id === app.candidateId);
-    const job = jobs.find((j) => j.id === app.jobId);
-    const { passwordHash, ...safeCandidate } = candidate || {} as User;
-    return { ...app, candidate: safeCandidate, job };
-  });
+    if (user.role === 'candidate') {
+      appsDocs = await ApplicationModel.find({ candidateId: user.id }).sort({ appliedAt: -1 });
+    } else {
+      const hrJobs = await JobModel.find({ hrId: user.id });
+      const jobIds = hrJobs.map((j) => j.id);
+      const { jobId } = req.query;
 
-  res.json(ok('Applications retrieved', enriched));
-});
-
-router.post('/applications', authenticate, requireCandidate, (req: Request, res: Response) => {
-  const candidateId = (req as any).user.id;
-  const { jobId, resumeUrl, resumeText } = req.body;
-
-  if (!jobId) return res.status(400).json(fail('jobId is required'));
-  if (applications.find((a) => a.candidateId === candidateId && a.jobId === jobId)) {
-    return res.status(409).json(fail('Already applied to this job'));
-  }
-
-  const job = jobs.find((j) => j.id === jobId);
-  if (!job) return res.status(404).json(fail('Job not found'));
-
-  const candidate = users.find((u) => u.id === candidateId);
-  const { score, matched, missing } = computeMatchScore(
-    candidate?.skills || [],
-    job.skills,
-    job.requirements
-  );
-  const feedback = generateResumeFeedback(candidate?.skills || [], job.skills, job.title);
-
-  const newApp: Application = {
-    id: `app-${Date.now()}`,
-    jobId,
-    candidateId,
-    hrId: job.hrId,
-    status: 'applied',
-    appliedAt: new Date().toISOString(),
-    matchScore: score,
-    matchedSkills: matched,
-    missingSkills: missing,
-    resumeUrl: resumeUrl || candidate?.resumeUrl,
-    resumeText,
-    resumeFeedback: feedback,
-    aiAnalysis: `AI Analysis: ${score}% match. ${matched.length} of ${job.skills.length} required skills matched.`,
-  };
-  applications.push(newApp);
-
-  // Update job applicant count
-  const jobIdx = jobs.findIndex((j) => j.id === jobId);
-  if (jobIdx >= 0) jobs[jobIdx].applicantsCount++;
-
-  // Notify HR
-  notifications.push({
-    id: `notif-${Date.now()}`,
-    userId: job.hrId,
-    type: 'application_received',
-    title: `New Application: ${job.title}`,
-    message: `${candidate?.name} has applied for ${job.title} with a ${score}% match score.`,
-    read: false,
-    createdAt: new Date().toISOString(),
-    jobId,
-    applicationId: newApp.id,
-  });
-
-  res.status(201).json(ok('Application submitted', { ...newApp, feedback, matchScore: score }));
-});
-
-router.patch('/applications/:id/status', authenticate, requireHR, (req: Request, res: Response) => {
-  const { status, notes } = req.body;
-  const idx = applications.findIndex((a) => a.id === req.params.id && a.hrId === (req as any).user.id);
-  if (idx === -1) return res.status(404).json(fail('Application not found or unauthorized'));
-  applications[idx].status = status;
-  if (notes) applications[idx].notes = notes;
-
-  const app = applications[idx];
-  const job = jobs.find((j) => j.id === app.jobId);
-  const statusMessages: Record<string, string> = {
-    shortlisted: `You have been shortlisted for ${job?.title} at ${job?.company}! 🎉`,
-    interview_scheduled: `Your interview for ${job?.title} has been scheduled.`,
-    offered: `Congratulations! You have received a job offer for ${job?.title} at ${job?.company}! 🎊`,
-    hired: `Welcome aboard! You have been hired for ${job?.title} at ${job?.company}!`,
-    rejected: `Your application for ${job?.title} has been reviewed. Unfortunately, we will not be moving forward at this time.`,
-  };
-
-  if (statusMessages[status]) {
-    notifications.push({
-      id: `notif-${Date.now()}`,
-      userId: app.candidateId,
-      type: 'status_update',
-      title: `Application Update: ${status.replace('_', ' ').toUpperCase()}`,
-      message: statusMessages[status],
-      read: false,
-      createdAt: new Date().toISOString(),
-      jobId: app.jobId,
-      applicationId: app.id,
-    });
-  }
-
-  res.json(ok('Application status updated', applications[idx]));
-});
-
-// ─── RESUME ANALYSIS ──────────────────────────────────────────────────────────
-router.post('/resume/analyze', authenticate, (req: Request, res: Response) => {
-  const { jobId, skills: inputSkills, resumeText } = req.body;
-  const userId = (req as any).user.id;
-
-  const job = jobs.find((j) => j.id === jobId);
-  if (!job) return res.status(404).json(fail('Job not found'));
-
-  const user = users.find((u) => u.id === userId);
-  const candidateSkills = inputSkills || user?.skills || [];
-
-  const { score, matched, missing } = computeMatchScore(candidateSkills, job.skills, job.requirements);
-  const feedback = generateResumeFeedback(candidateSkills, job.skills, job.title);
-
-  // Gap analysis by category
-  const gapAnalysis = {
-    score,
-    matchedSkills: matched,
-    missingSkills: missing,
-    feedback,
-    recommendations: [
-      ...missing.slice(0, 3).map((skill) => ({
-        skill,
-        priority: 'high',
-        action: `Learn ${skill} — take an online course or build a project using it`,
-      })),
-      {
-        skill: 'Quantifiable Achievements',
-        priority: 'medium',
-        action: 'Add metrics to your experience (e.g., "Reduced load time by 50%")',
-      },
-      {
-        skill: 'ATS Optimization',
-        priority: 'medium',
-        action: `Include keywords from the job description: "${job.title}", "${job.skills.slice(0, 3).join('", "')}"`,
-      },
-    ],
-    overallSuggestion: score >= 80
-      ? '🟢 Strong match! Polish your resume and apply with confidence.'
-      : score >= 60
-      ? '🟡 Good foundation. Fill the skill gaps listed above before applying.'
-      : '🔴 Significant gaps detected. Focus on the high-priority skills first.',
-  };
-
-  res.json(ok('Resume analysis complete', gapAnalysis));
-});
-
-// ─── INTERVIEWS ───────────────────────────────────────────────────────────────
-router.get('/interviews', authenticate, (req: Request, res: Response) => {
-  const user = (req as any).user;
-  const result = interviews.filter((i) =>
-    user.role === 'hr' ? i.hrId === user.id : i.candidateId === user.id
-  );
-  const enriched = result.map((interview) => {
-    const candidate = users.find((u) => u.id === interview.candidateId);
-    const job = jobs.find((j) => j.id === interview.jobId);
-    const { passwordHash, ...safeCandidate } = candidate || {} as User;
-    return { ...interview, candidate: safeCandidate, job };
-  });
-  res.json(ok('Interviews retrieved', enriched));
-});
-
-router.post('/interviews', authenticate, requireHR, (req: Request, res: Response) => {
-  const hrId = (req as any).user.id;
-  const { applicationId, scheduledAt, duration, mode, platform, meetLink, notes } = req.body;
-
-  const app = applications.find((a) => a.id === applicationId && a.hrId === hrId);
-  if (!app) return res.status(404).json(fail('Application not found or unauthorized'));
-
-  const newInterview: Interview = {
-    id: `int-${Date.now()}`,
-    applicationId,
-    jobId: app.jobId,
-    candidateId: app.candidateId,
-    hrId,
-    scheduledAt,
-    duration: duration || 60,
-    mode: mode || 'video',
-    platform,
-    meetLink,
-    status: 'scheduled',
-    notes,
-  };
-  interviews.push(newInterview);
-
-  // Update application status
-  const appIdx = applications.findIndex((a) => a.id === applicationId);
-  if (appIdx >= 0) applications[appIdx].status = 'interview_scheduled';
-
-  const job = jobs.find((j) => j.id === app.jobId);
-  notifications.push({
-    id: `notif-${Date.now()}`,
-    userId: app.candidateId,
-    type: 'interview_scheduled',
-    title: 'Interview Scheduled!',
-    message: `Your interview for ${job?.title} at ${job?.company} is scheduled for ${new Date(scheduledAt).toLocaleString()}. Mode: ${mode}${meetLink ? `. Link: ${meetLink}` : ''}.`,
-    read: false,
-    createdAt: new Date().toISOString(),
-    jobId: app.jobId,
-    applicationId,
-  });
-
-  res.status(201).json(ok('Interview scheduled', newInterview));
-});
-
-router.patch('/interviews/:id', authenticate, (req: Request, res: Response) => {
-  const idx = interviews.findIndex((i) => i.id === req.params.id);
-  if (idx === -1) return res.status(404).json(fail('Interview not found'));
-  Object.assign(interviews[idx], req.body);
-  res.json(ok('Interview updated', interviews[idx]));
-});
-
-// ─── AI DEMO INTERVIEW ────────────────────────────────────────────────────────
-const interviewQuestions: Record<string, string[]> = {
-  'React': [
-    'Explain the difference between useState and useEffect hooks.',
-    'How does React\'s virtual DOM improve performance?',
-    'What are the differences between class components and functional components?',
-    'Explain the concept of lifting state up in React.',
-    'How would you optimize a slow-rendering React component?',
-  ],
-  'Python': [
-    'What is the difference between a list and a tuple in Python?',
-    'Explain Python\'s GIL (Global Interpreter Lock) and its implications.',
-    'How do generators work in Python and when would you use them?',
-    'What are decorators in Python? Give an example.',
-    'How would you handle memory management for a large dataset?',
-  ],
-  'Java': [
-    'Explain the difference between abstract class and interface in Java.',
-    'What is the difference between HashMap and ConcurrentHashMap?',
-    'Explain the concept of dependency injection.',
-    'How does garbage collection work in the JVM?',
-    'What are the SOLID principles?',
-  ],
-  'default': [
-    'Tell me about yourself and your background.',
-    'Why are you interested in this role?',
-    'Describe a challenging project you worked on and how you overcame obstacles.',
-    'Where do you see yourself in 5 years?',
-    'What is your greatest professional achievement?',
-    'How do you handle working under pressure or tight deadlines?',
-    'Describe your ideal work environment.',
-    'What salary range are you expecting for this role?',
-  ],
-};
-
-router.post('/interview/questions', authenticate, (req: Request, res: Response) => {
-  const { jobId, skills } = req.body;
-  const job = jobs.find((j) => j.id === jobId);
-
-  const questions: string[] = [];
-  const jobSkills = skills || job?.skills || [];
-
-  // Add skill-specific questions
-  jobSkills.forEach((skill: string) => {
-    const qs = interviewQuestions[skill];
-    if (qs) {
-      const picked = qs.sort(() => 0.5 - Math.random()).slice(0, 2);
-      questions.push(...picked);
+      if (jobId) {
+        appsDocs = await ApplicationModel.find({ jobId: String(jobId) }).sort({ appliedAt: -1 });
+      } else {
+        appsDocs = await ApplicationModel.find({ jobId: { $in: jobIds } }).sort({ appliedAt: -1 });
+      }
     }
-  });
 
-  // Always add behavioral questions
-  const behavioral = interviewQuestions['default'].sort(() => 0.5 - Math.random()).slice(0, 3);
-  questions.push(...behavioral);
+    const result = [];
+    for (const a of appsDocs) {
+      const jobDoc = await JobModel.findOne({ id: a.jobId });
+      const candDoc = await UserModel.findOne({ id: a.candidateId });
+      result.push({
+        ...cleanDoc(a),
+        job: jobDoc ? cleanDoc(jobDoc) : undefined,
+        candidate: candDoc ? sanitizeUser(candDoc) : undefined,
+      });
+    }
 
-  res.json(ok('Interview questions generated', {
-    questions: questions.slice(0, 10),
-    jobTitle: job?.title || 'General Role',
-    totalQuestions: Math.min(questions.length, 10),
-  }));
+    res.json(ok('Applications retrieved', result));
+  } catch (err: any) {
+    res.status(500).json(fail('Error fetching applications', err.message));
+  }
 });
 
-router.post('/interview/evaluate', authenticate, (req: Request, res: Response) => {
-  const { question, answer, jobId } = req.body;
-  if (!answer || !question) return res.status(400).json(fail('Question and answer are required'));
+router.post('/applications', authenticate, requireCandidate, async (req: Request, res: Response) => {
+  try {
+    const candidateId = (req as any).user.id;
+    const { jobId, resumeUrl } = req.body;
 
-  // Simulated AI evaluation
-  const wordCount = answer.split(' ').length;
-  const hasStructure = answer.includes('because') || answer.includes('for example') || answer.includes('specifically') || answer.includes('result');
-  const isDetailed = wordCount > 50;
-  const hasTechnicalTerms = answer.match(/\b(API|database|component|function|class|async|promise|stack|algorithm|complexity|pattern)\b/gi);
+    if (!jobId) return res.status(400).json(fail('jobId is required'));
 
-  let score = 50;
-  if (wordCount > 30) score += 10;
-  if (wordCount > 80) score += 10;
-  if (hasStructure) score += 15;
-  if (isDetailed) score += 10;
-  if (hasTechnicalTerms && hasTechnicalTerms.length > 0) score += 15;
-  score = Math.min(100, score);
+    const job = await JobModel.findOne({ id: jobId });
+    if (!job) return res.status(404).json(fail('Job not found'));
 
-  const feedback = score >= 80
-    ? 'Excellent answer! Well-structured with clear technical depth.'
-    : score >= 60
-    ? 'Good answer. Try to add more specific examples or quantifiable outcomes.'
-    : 'Answer needs improvement. Be more specific, use the STAR method (Situation, Task, Action, Result), and add technical depth.';
+    const existing = await ApplicationModel.findOne({ jobId, candidateId });
+    if (existing) return res.status(409).json(fail('You have already applied to this job'));
 
-  res.json(ok('Answer evaluated', {
-    score,
-    feedback,
-    tips: [
-      wordCount < 50 ? '💡 Tip: Expand your answer with more detail and examples.' : '✅ Good answer length.',
-      !hasStructure ? '💡 Tip: Use structured phrases like "For example..." or "As a result...".' : '✅ Good structure.',
-      !hasTechnicalTerms ? '💡 Tip: Include relevant technical terms to demonstrate expertise.' : '✅ Good technical depth.',
-    ],
-  }));
-});
+    const candidate = await UserModel.findOne({ id: candidateId });
+    if (!candidate) return res.status(404).json(fail('Candidate profile not found'));
 
-// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
-router.get('/notifications', authenticate, (req: Request, res: Response) => {
-  const userId = (req as any).user.id;
-  const userNotifs = notifications.filter((n) => n.userId === userId).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-  res.json(ok('Notifications retrieved', userNotifs));
-});
+    const candObj = sanitizeUser(candidate);
+    const { score, matched, missing } = computeMatchScore(candObj.skills || [], job.skills || [], job.requirements || []);
+    const resumeFeedback = generateResumeFeedback(candObj.skills || [], job.skills || [], job.title);
 
-router.patch('/notifications/:id/read', authenticate, (req: Request, res: Response) => {
-  const userId = (req as any).user.id;
-  const idx = notifications.findIndex((n) => n.id === req.params.id && n.userId === userId);
-  if (idx === -1) return res.status(404).json(fail('Notification not found'));
-  notifications[idx].read = true;
-  res.json(ok('Notification marked as read'));
-});
-
-router.patch('/notifications/read-all', authenticate, (req: Request, res: Response) => {
-  const userId = (req as any).user.id;
-  notifications.filter((n) => n.userId === userId).forEach((n) => { n.read = true; });
-  res.json(ok('All notifications marked as read'));
-});
-
-// ─── ANALYTICS (HR only) ──────────────────────────────────────────────────────
-router.get('/analytics', authenticate, requireHR, (req: Request, res: Response) => {
-  const hrId = (req as any).user.id;
-  const hrJobs = jobs.filter((j) => j.hrId === hrId);
-  const hrApps = applications.filter((a) => a.hrId === hrId);
-  const hrInterviews = interviews.filter((i) => i.hrId === hrId);
-
-  const statusCounts = {
-    applied: hrApps.filter((a) => a.status === 'applied').length,
-    shortlisted: hrApps.filter((a) => a.status === 'shortlisted').length,
-    interview_scheduled: hrApps.filter((a) => a.status === 'interview_scheduled').length,
-    interviewed: hrApps.filter((a) => a.status === 'interviewed').length,
-    offered: hrApps.filter((a) => a.status === 'offered').length,
-    hired: hrApps.filter((a) => a.status === 'hired').length,
-    rejected: hrApps.filter((a) => a.status === 'rejected').length,
-  };
-
-  const avgMatchScore = hrApps.length > 0
-    ? Math.round(hrApps.reduce((acc, a) => acc + a.matchScore, 0) / hrApps.length)
-    : 0;
-
-  const jobStats = hrJobs.map((job) => {
-    const jobApps = hrApps.filter((a) => a.jobId === job.id);
-    return {
-      jobId: job.id,
-      title: job.title,
-      applicants: jobApps.length,
-      avgScore: jobApps.length > 0 ? Math.round(jobApps.reduce((acc, a) => acc + a.matchScore, 0) / jobApps.length) : 0,
-      hired: jobApps.filter((a) => a.status === 'hired').length,
-    };
-  });
-
-  res.json(ok('Analytics retrieved', {
-    totalJobs: hrJobs.length,
-    activeJobs: hrJobs.filter((j) => j.status === 'active').length,
-    totalApplications: hrApps.length,
-    totalInterviews: hrInterviews.length,
-    avgMatchScore,
-    statusFunnel: [
-      { stage: 'Applied', count: statusCounts.applied + statusCounts.shortlisted + statusCounts.interview_scheduled + statusCounts.interviewed + statusCounts.offered + statusCounts.hired + statusCounts.rejected },
-      { stage: 'Shortlisted', count: statusCounts.shortlisted + statusCounts.interview_scheduled + statusCounts.interviewed + statusCounts.offered + statusCounts.hired },
-      { stage: 'Interviewed', count: statusCounts.interview_scheduled + statusCounts.interviewed + statusCounts.offered + statusCounts.hired },
-      { stage: 'Offered', count: statusCounts.offered + statusCounts.hired },
-      { stage: 'Hired', count: statusCounts.hired },
-    ],
-    statusBreakdown: statusCounts,
-    jobStats,
-    upcomingInterviews: hrInterviews.filter((i) => i.status === 'scheduled').length,
-    hireRate: hrApps.length > 0 ? Math.round((statusCounts.hired / hrApps.length) * 100) : 0,
-  }));
-});
-
-// ─── CANDIDATE MATCH FOR A JOB ────────────────────────────────────────────────
-router.get('/jobs/:id/candidates', authenticate, requireHR, (req: Request, res: Response) => {
-  const job = jobs.find((j) => j.id === req.params.id && j.hrId === (req as any).user.id);
-  if (!job) return res.status(404).json(fail('Job not found or unauthorized'));
-
-  const candidates = users.filter((u) => u.role === 'candidate');
-  const ranked = candidates.map((candidate) => {
-    const { score, matched, missing } = computeMatchScore(
-      candidate.skills || [],
-      job.skills,
-      job.requirements
-    );
-    const existingApp = applications.find((a) => a.candidateId === candidate.id && a.jobId === job.id);
-    const { passwordHash, ...safeCandidate } = candidate;
-    return {
-      candidate: safeCandidate,
+    const newApp = await ApplicationModel.create({
+      id: `app-${Date.now()}`,
+      jobId,
+      candidateId,
+      status: 'applied',
+      appliedAt: new Date(),
       matchScore: score,
       matchedSkills: matched,
       missingSkills: missing,
-      application: existingApp || null,
-    };
-  }).sort((a, b) => b.matchScore - a.matchScore);
+      resumeUrl: resumeUrl || candidate.resumeUrl || 'https://example.com/resume.pdf',
+      aiAnalysis: `Match Score ${score}%. Matched ${matched.length}/${job.skills.length} required skills. ${missing.length ? `Missing: ${missing.join(', ')}.` : 'Perfect skill match!'}`,
+      resumeFeedback,
+    });
 
-  res.json(ok('Ranked candidates for job', ranked));
+    job.applicantsCount += 1;
+    await job.save();
+
+    // Notify HR
+    await NotificationModel.create({
+      id: `notif-${Date.now()}`,
+      userId: job.hrId,
+      type: 'application_received',
+      title: `New Application for ${job.title}`,
+      message: `${candidate.name} applied for ${job.title} with a ${score}% match score.`,
+      read: false,
+      createdAt: new Date(),
+      metadata: { applicationId: newApp.id, jobId },
+    });
+
+    res.status(201).json(ok('Application submitted successfully', cleanDoc(newApp)));
+  } catch (err: any) {
+    res.status(500).json(fail('Error submitting application', err.message));
+  }
+});
+
+router.patch('/applications/:id/status', authenticate, requireHR, async (req: Request, res: Response) => {
+  try {
+    const { status, notes } = req.body;
+    const valid = ['applied', 'shortlisted', 'interview_scheduled', 'interviewed', 'offered', 'hired', 'rejected'];
+    if (!status || !valid.includes(status)) return res.status(400).json(fail('Invalid status'));
+
+    const app = await ApplicationModel.findOne({ id: req.params.id });
+    if (!app) return res.status(404).json(fail('Application not found'));
+
+    app.status = status;
+    if (notes) app.notes = notes;
+    await app.save();
+
+    const job = await JobModel.findOne({ id: app.jobId });
+
+    // Notify Candidate
+    const statusTitles: Record<string, string> = {
+      shortlisted: '⭐ Application Shortlisted!',
+      interview_scheduled: '📅 Interview Scheduled!',
+      offered: '🎉 Job Offer Received!',
+      hired: '🚀 Congratulations, You Are Hired!',
+      rejected: 'Application Status Update',
+    };
+
+    await NotificationModel.create({
+      id: `notif-${Date.now()}`,
+      userId: app.candidateId,
+      type: 'status_update',
+      title: statusTitles[status] || `Application Status: ${status}`,
+      message: `Your application status for ${job?.title || 'the position'} at ${job?.company || 'the company'} was updated to "${status.replace(/_/g, ' ')}".`,
+      read: false,
+      createdAt: new Date(),
+    });
+
+    const candidate = await UserModel.findOne({ id: app.candidateId });
+
+    res.json(ok('Status updated', {
+      ...cleanDoc(app),
+      job: job ? cleanDoc(job) : undefined,
+      candidate: candidate ? sanitizeUser(candidate) : undefined,
+    }));
+  } catch (err: any) {
+    res.status(500).json(fail('Error updating status', err.message));
+  }
+});
+
+// ─── RESUME ANALYZER ──────────────────────────────────────────────────────────
+router.post('/resume/analyze', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { jobId, skills: userSkills } = req.body;
+    const candidateId = (req as any).user.id;
+
+    if (!jobId) return res.status(400).json(fail('jobId is required'));
+    const job = await JobModel.findOne({ id: jobId });
+    if (!job) return res.status(404).json(fail('Job not found'));
+
+    const candidate = await UserModel.findOne({ id: candidateId });
+    const skillsToUse: string[] = userSkills || candidate?.skills || [];
+    const jobSkillsLower = job.skills.map((s) => s.toLowerCase());
+
+    const matched = skillsToUse.filter((s) => jobSkillsLower.includes(s.toLowerCase()));
+    const missing = job.skills.filter((s) => !skillsToUse.map((us) => us.toLowerCase()).includes(s.toLowerCase()));
+    const score = Math.round((matched.length / Math.max(job.skills.length, 1)) * 100);
+
+    const recommendations = missing.map((skill) => ({
+      skill,
+      priority: job.requirements.some((r) => r.toLowerCase().includes(skill.toLowerCase())) ? 'high' : 'medium',
+      action: `Add projects or certifications demonstrating ${skill} to your resume before applying.`,
+    }));
+
+    res.json(ok('Resume analysis completed', {
+      jobId,
+      jobTitle: job.title,
+      company: job.company,
+      score,
+      matchedSkills: matched,
+      missingSkills: missing,
+      recommendations,
+      overallSuggestion: score >= 80 ? 'Strong match! You meet most required skills.' : score >= 60 ? 'Good match. Focus on missing key skills in your summary.' : 'Gaps detected. Upskill in required technologies before applying.',
+    }));
+  } catch (err: any) {
+    res.status(500).json(fail('Error analyzing resume', err.message));
+  }
+});
+
+// ─── INTERVIEWS ───────────────────────────────────────────────────────────────
+router.get('/interviews', authenticate, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    let listDocs: any[] = [];
+
+    if (user.role === 'hr') {
+      listDocs = await InterviewModel.find({ hrId: user.id }).sort({ scheduledAt: 1 });
+    } else {
+      listDocs = await InterviewModel.find({ candidateId: user.id }).sort({ scheduledAt: 1 });
+    }
+
+    const result = [];
+    for (const iv of listDocs) {
+      const job = await JobModel.findOne({ id: iv.jobId });
+      const candidate = await UserModel.findOne({ id: iv.candidateId });
+      const hr = await UserModel.findOne({ id: iv.hrId });
+
+      result.push({
+        ...cleanDoc(iv),
+        job: job ? cleanDoc(job) : undefined,
+        candidate: candidate ? sanitizeUser(candidate) : undefined,
+        hr: hr ? sanitizeUser(hr) : undefined,
+      });
+    }
+
+    res.json(ok('Interviews retrieved', result));
+  } catch (err: any) {
+    res.status(500).json(fail('Error fetching interviews', err.message));
+  }
+});
+
+router.post('/interviews', authenticate, requireHR, async (req: Request, res: Response) => {
+  try {
+    const hrId = (req as any).user.id;
+    const { applicationId, scheduledAt, duration, mode, platform, meetLink, notes } = req.body;
+
+    if (!applicationId || !scheduledAt) return res.status(400).json(fail('applicationId and scheduledAt are required'));
+
+    const app = await ApplicationModel.findOne({ id: applicationId });
+    if (!app) return res.status(404).json(fail('Application not found'));
+
+    const job = await JobModel.findOne({ id: app.jobId });
+
+    const newInterview = await InterviewModel.create({
+      id: `int-${Date.now()}`,
+      applicationId,
+      hrId,
+      candidateId: app.candidateId,
+      jobId: app.jobId,
+      scheduledAt: new Date(scheduledAt),
+      duration: duration || 60,
+      mode: mode || 'video',
+      platform: platform || 'google_meet',
+      meetLink: meetLink || 'https://meet.google.com/abc-defg-hij',
+      notes,
+      status: 'scheduled',
+      createdAt: new Date(),
+    });
+
+    app.status = 'interview_scheduled';
+    await app.save();
+
+    // Notify Candidate
+    await NotificationModel.create({
+      id: `notif-${Date.now()}`,
+      userId: app.candidateId,
+      type: 'interview_scheduled',
+      title: `Interview Scheduled for ${job?.title}`,
+      message: `An interview has been scheduled on ${new Date(scheduledAt).toLocaleString()}. Mode: ${mode || 'video'}.`,
+      read: false,
+      createdAt: new Date(),
+      metadata: { interviewId: newInterview.id, meetLink: newInterview.meetLink },
+    });
+
+    res.status(201).json(ok('Interview scheduled successfully', cleanDoc(newInterview)));
+  } catch (err: any) {
+    res.status(500).json(fail('Error scheduling interview', err.message));
+  }
+});
+
+router.patch('/interviews/:id', authenticate, async (req: Request, res: Response) => {
+  try {
+    const iv = await InterviewModel.findOne({ id: req.params.id });
+    if (!iv) return res.status(404).json(fail('Interview not found'));
+
+    Object.assign(iv, req.body);
+    await iv.save();
+    res.json(ok('Interview updated', cleanDoc(iv)));
+  } catch (err: any) {
+    res.status(500).json(fail('Error updating interview', err.message));
+  }
+});
+
+// AI Demo Interview Questions
+router.post('/interview/questions', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { jobId } = req.body;
+    const job = await JobModel.findOne({ id: jobId });
+
+    const baseQs = [
+      'Tell me about yourself and why you are interested in this position.',
+      `Describe a challenging project you worked on involving ${job?.skills?.[0] || 'core technologies'} and how you handled it.`,
+      'How do you prioritize tasks when working under tight deadlines with multiple stakeholders?',
+      `What is your experience with ${job?.skills?.[1] || 'software development best practices'}? Give a concrete example.`,
+      'Describe a situation where you had a conflict with a team member. How did you resolve it?',
+      `Where do you see your technical skills evolving over the next 2-3 years, especially regarding ${job?.skills?.[2] || 'new tech'}?`,
+    ];
+
+    res.json(ok('Questions generated', { jobId, jobTitle: job?.title || 'Target Role', questions: baseQs }));
+  } catch (err: any) {
+    res.status(500).json(fail('Error generating questions', err.message));
+  }
+});
+
+// Evaluate AI Demo Interview Answer
+router.post('/interview/evaluate', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { question, answer } = req.body;
+    if (!answer) return res.status(400).json(fail('Answer is required'));
+
+    const len = answer.trim().length;
+    let score = 70;
+    if (len > 200) score = 90;
+    else if (len > 100) score = 80;
+    else if (len < 50) score = 55;
+
+    res.json(ok('Answer evaluated', {
+      question,
+      score,
+      feedback: score >= 80 ? 'Excellent, structured response with good detail.' : score >= 70 ? 'Good answer, but try adding specific metrics or project outcomes.' : 'Answer is too brief. Provide STAR method examples (Situation, Task, Action, Result).',
+      tips: [
+        '💡 Use the STAR method to structure your responses.',
+        '💡 Quantify your achievements (e.g., "improved speed by 30%").',
+        '💡 Connect your experience directly to the job description requirements.',
+      ],
+    }));
+  } catch (err: any) {
+    res.status(500).json(fail('Error evaluating answer', err.message));
+  }
+});
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+router.get('/notifications', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const notifs = await NotificationModel.find({ userId }).sort({ createdAt: -1 });
+    const formatted = notifs.map(cleanDoc);
+    res.json(ok('Notifications retrieved', formatted));
+  } catch (err: any) {
+    res.status(500).json(fail('Error fetching notifications', err.message));
+  }
+});
+
+router.patch('/notifications/:id/read', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const n = await NotificationModel.findOne({ id: req.params.id, userId });
+    if (n) {
+      n.read = true;
+      await n.save();
+    }
+    res.json(ok('Notification marked as read'));
+  } catch (err: any) {
+    res.status(500).json(fail('Error marking notification read', err.message));
+  }
+});
+
+router.patch('/notifications/read-all', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    await NotificationModel.updateMany({ userId }, { read: true });
+    res.json(ok('All notifications marked as read'));
+  } catch (err: any) {
+    res.status(500).json(fail('Error marking all read', err.message));
+  }
+});
+
+// ─── ANALYTICS ────────────────────────────────────────────────────────────────
+router.get('/analytics', authenticate, requireHR, async (req: Request, res: Response) => {
+  try {
+    const hrId = (req as any).user.id;
+    const hrJobs = await JobModel.find({ hrId });
+    const hrJobIds = hrJobs.map((j) => j.id);
+
+    const hrApps = await ApplicationModel.find({ jobId: { $in: hrJobIds } });
+    const hrInterviews = await InterviewModel.find({ hrId });
+
+    const statusBreakdown = {
+      applied: hrApps.filter((a) => a.status === 'applied').length,
+      shortlisted: hrApps.filter((a) => a.status === 'shortlisted').length,
+      interview_scheduled: hrApps.filter((a) => a.status === 'interview_scheduled').length,
+      interviewed: hrApps.filter((a) => a.status === 'interviewed').length,
+      offered: hrApps.filter((a) => a.status === 'offered').length,
+      hired: hrApps.filter((a) => a.status === 'hired').length,
+      rejected: hrApps.filter((a) => a.status === 'rejected').length,
+    };
+
+    const avgScore = hrApps.length
+      ? Math.round(hrApps.reduce((sum, a) => sum + a.matchScore, 0) / hrApps.length)
+      : 0;
+
+    const jobStats = hrJobs.map((job) => {
+      const apps = hrApps.filter((a) => a.jobId === job.id);
+      const scoreSum = apps.reduce((sum, a) => sum + a.matchScore, 0);
+      return {
+        id: job.id,
+        title: job.title,
+        applicants: apps.length,
+        avgScore: apps.length ? Math.round(scoreSum / apps.length) : 0,
+      };
+    });
+
+    res.json(ok('Analytics retrieved', {
+      totalJobs: hrJobs.length,
+      activeJobs: hrJobs.filter((j) => j.status === 'active').length,
+      totalApplications: hrApps.length,
+      totalInterviews: hrInterviews.length,
+      upcomingInterviews: hrInterviews.filter((i) => i.status === 'scheduled' && new Date(i.scheduledAt) > new Date()).length,
+      avgMatchScore: avgScore,
+      hireRate: hrApps.length ? Math.round((statusBreakdown.hired / hrApps.length) * 100) : 0,
+      statusBreakdown,
+      jobStats,
+      statusFunnel: [
+        { stage: 'Applied', count: hrApps.length },
+        { stage: 'Shortlisted', count: statusBreakdown.shortlisted + statusBreakdown.interview_scheduled + statusBreakdown.interviewed + statusBreakdown.offered + statusBreakdown.hired },
+        { stage: 'Interview Scheduled', count: statusBreakdown.interview_scheduled + statusBreakdown.interviewed + statusBreakdown.offered + statusBreakdown.hired },
+        { stage: 'Offered', count: statusBreakdown.offered + statusBreakdown.hired },
+        { stage: 'Hired', count: statusBreakdown.hired },
+      ],
+    }));
+  } catch (err: any) {
+    res.status(500).json(fail('Error fetching analytics', err.message));
+  }
 });
 
 export default router;
