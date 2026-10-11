@@ -170,8 +170,48 @@ export default function ProfilePage() {
                     <label className="form-label">Bio</label>
                     <textarea className="form-textarea" rows={3} value={form.bio || ''} onChange={(e) => set('bio', e.target.value)} />
                   </div>
+
+                  {/* Future Opportunities Alert Toggle */}
+                  <div style={{ background: 'var(--primary-soft)', padding: 14, borderRadius: 10, marginBottom: 16, border: '1px solid var(--border)' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>
+                      <input
+                        type="checkbox"
+                        checked={form.notifyFutureJobsOnRejection !== false}
+                        onChange={(e) => set('notifyFutureJobsOnRejection', e.target.checked as any)}
+                        style={{ width: 18, height: 18, accentColor: 'var(--primary)' }}
+                      />
+                      <span>🔔 Receive Future Job Availability Alerts if Rejected</span>
+                    </label>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, marginLeft: 28 }}>
+                      If an application does not work out, HR and the automated system will instantly alert you when new openings matching your skill set become available in the future.
+                    </div>
+                  </div>
                 </>
               )}
+
+              {/* Theme Settings for all users */}
+              <div style={{ marginTop: 12, marginBottom: 20 }}>
+                <label className="form-label">🎨 Interface Color Theme</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8 }}>
+                  {[
+                    { id: 'default', label: '💜 Indigo / Purple', color: '#6366f1' },
+                    { id: 'dark', label: '🌙 Midnight Dark', color: '#0f172a' },
+                    { id: 'emerald', label: '🍃 Mint Emerald', color: '#059669' },
+                    { id: 'sunset', label: '🌅 Sunset Coral', color: '#ea580c' },
+                    { id: 'ocean', label: '🌊 Azure Ocean', color: '#0284c7' },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`btn btn-sm ${form.themePreference === t.id ? 'btn-primary' : 'btn-ghost'}`}
+                      style={{ fontSize: 11, padding: '8px 10px' }}
+                      onClick={() => set('themePreference', t.id)}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button type="button" className="btn btn-ghost" onClick={() => setEditing(false)}>Cancel</button>
@@ -239,6 +279,20 @@ export default function ProfilePage() {
                       <a href={user.resumeUrl as string} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ display: 'inline-flex' }}>📄 View Resume</a>
                     </div>
                   )}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>🐙 GitHub Connector</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{user?.githubUsername ? `@${user.githubUsername} (Synced)` : 'Not Connected'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>🎯 Unstop Connector</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{user?.unstopUsername ? `@${user.unstopUsername} (Synced)` : 'Not Connected'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Future Job Availability Alerts</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: user?.notifyFutureJobsOnRejection !== false ? 'var(--green)' : 'var(--red)' }}>
+                      {user?.notifyFutureJobsOnRejection !== false ? '✅ Enabled (Alerts if rejected)' : '❌ Disabled'}
+                    </div>
+                  </div>
                 </>
               )}
             </div>

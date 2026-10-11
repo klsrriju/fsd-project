@@ -27,6 +27,28 @@ export interface IUser extends Document {
   linkedIn?: string;
   portfolioUrl?: string;
   resumeUrl?: string;
+  themePreference?: 'default' | 'dark' | 'emerald' | 'sunset' | 'ocean';
+  githubUsername?: string;
+  unstopUsername?: string;
+  notifyFutureJobsOnRejection?: boolean;
+  externalProfileData?: {
+    github?: {
+      connected: boolean;
+      reposCount?: number;
+      followers?: number;
+      topLanguages?: string[];
+      bio?: string;
+      avatarUrl?: string;
+      scrapedAt?: Date;
+    };
+    unstop?: {
+      connected: boolean;
+      badges?: string[];
+      competitionsCount?: number;
+      skills?: string[];
+      scrapedAt?: Date;
+    };
+  };
   createdAt: Date;
 }
 
@@ -57,6 +79,11 @@ const UserSchema = new Schema<IUser>({
   linkedIn: { type: String },
   portfolioUrl: { type: String },
   resumeUrl: { type: String },
+  themePreference: { type: String, default: 'default' },
+  githubUsername: { type: String },
+  unstopUsername: { type: String },
+  notifyFutureJobsOnRejection: { type: Boolean, default: true },
+  externalProfileData: { type: Schema.Types.Mixed, default: {} },
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -79,6 +106,8 @@ export interface IJob extends Document {
   createdAt: Date;
   applicantsCount: number;
   industry?: string;
+  source?: 'internal' | 'unstop' | 'github_jobs';
+  externalUrl?: string;
 }
 
 const JobSchema = new Schema<IJob>({
@@ -97,7 +126,9 @@ const JobSchema = new Schema<IJob>({
   status: { type: String, enum: ['active', 'closed', 'draft'], default: 'active' },
   createdAt: { type: Date, default: Date.now },
   applicantsCount: { type: Number, default: 0 },
-  industry: { type: String }
+  industry: { type: String },
+  source: { type: String, default: 'internal' },
+  externalUrl: { type: String },
 });
 
 export const JobModel = mongoose.model<IJob>('Job', JobSchema);
@@ -115,6 +146,7 @@ export interface IApplication extends Document {
   aiAnalysis?: string;
   resumeFeedback?: string;
   notes?: string;
+  futureJobAlertSent?: boolean;
 }
 
 const ApplicationSchema = new Schema<IApplication>({
@@ -133,7 +165,8 @@ const ApplicationSchema = new Schema<IApplication>({
   resumeUrl: { type: String },
   aiAnalysis: { type: String },
   resumeFeedback: { type: String },
-  notes: { type: String }
+  notes: { type: String },
+  futureJobAlertSent: { type: Boolean, default: false }
 });
 
 export const ApplicationModel = mongoose.model<IApplication>('Application', ApplicationSchema);
@@ -175,7 +208,7 @@ export const InterviewModel = mongoose.model<IInterview>('Interview', InterviewS
 export interface INotification extends Document {
   id: string;
   userId: string;
-  type: 'job_match' | 'status_update' | 'interview_scheduled' | 'application_received';
+  type: 'job_match' | 'status_update' | 'interview_scheduled' | 'application_received' | 'future_opportunity';
   title: string;
   message: string;
   read: boolean;

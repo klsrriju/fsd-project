@@ -3,10 +3,9 @@ import { UserModel, JobModel, ApplicationModel, InterviewModel, NotificationMode
 import { users, jobs, applications, interviews, notifications } from '../data/demoData';
 
 export async function seedMongoDB(): Promise<void> {
-  await connectMongoDB();
-
-  const userCount = await UserModel.countDocuments();
-  if (userCount === 0) {
+  try {
+    const userCount = await UserModel.countDocuments();
+    if (userCount === 0) {
     for (const u of users) {
       await UserModel.create({
         id: u.id,
@@ -126,5 +125,8 @@ export async function seedMongoDB(): Promise<void> {
     console.log(`✅ Seeded ${notifications.length} Notifications into MongoDB Atlas`);
   }
 
-  console.log('🎉 MongoDB Atlas Seeding Complete!');
+    console.log('🎉 MongoDB Atlas Seeding Complete!');
+  } catch (err: any) {
+    console.warn('⚠️ Seeding skipped or deferred:', err.message);
+  }
 }

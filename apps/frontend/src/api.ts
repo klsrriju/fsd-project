@@ -93,7 +93,18 @@ export const notificationsAPI = {
   markAllRead: () => api.patch('/notifications/read-all', {}),
 };
 
+// Connectors & Web Scraping
+export const connectorsAPI = {
+  syncGitHub: (username: string) =>
+    api.post('/connectors/github/sync', { username }),
+  syncUnstop: (username: string) =>
+    api.post('/connectors/unstop/sync', { username }),
+  getExternalJobs: (query?: string) =>
+    api.get('/jobs/external', { params: { query } }),
+};
+
 // Analytics
 export const analyticsAPI = {
   get: () => api.get('/analytics'),
 };
+

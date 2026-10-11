@@ -6,6 +6,7 @@ import {
 } from '../models/mongoModels';
 import { computeMatchScore, generateResumeFeedback } from '../data/demoData';
 import { config } from '../config/env';
+import { scrapeGitHubProfile, scrapeUnstopProfile, scrapeExternalJobs } from '../services/scraperService';
 
 const router = Router();
 
@@ -141,6 +142,84 @@ router.patch('/auth/profile', authenticate, async (req: Request, res: Response) 
   }
 });
 
+// ─── CONNECTORS & WEBSCRAPING ─────────────────────────────────────────────────
+router.post('/connectors/github/sync', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const { username } = req.body;
+    if (!username) return res.status(400).json(fail('GitHub username is required'));
+
+    const user = await UserModel.findOne({ id: userId });
+    if (!user) return res.status(404).json(fail('User not found'));
+
+    const githubData = await scrapeGitHubProfile(username);
+    
+    // Automatically merge new discovered skills into candidate's skill profile
+    const existingSkills = new Set(user.skills || []);
+    githubData.skillsExtracted.forEach(s => existingSkills.add(s));
+    
+    user.githubUsername = githubData.username;
+    user.skills = Array.from(existingSkills);
+    if (!user.externalProfileData) user.externalProfileData = {};
+    user.externalProfileData.github = githubData;
+
+    await user.save();
+
+    res.json(ok('GitHub account linked & skills synchronized!', {
+      github: githubData,
+      updatedSkills: user.skills,
+      user: sanitizeUser(user)
+    }));
+  } catch (err: any) {
+    res.status(500).json(fail('Failed to sync GitHub account', err.message));
+  }
+});
+
+router.post('/connectors/unstop/sync', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const { username } = req.body;
+    if (!username) return res.status(400).json(fail('Unstop username is required'));
+
+    const user = await UserModel.findOne({ id: userId });
+    if (!user) return res.status(404).json(fail('User not found'));
+
+    const unstopData = await scrapeUnstopProfile(username);
+
+    // Merge new discovered skills from Unstop competitions/assessments
+    const existingSkills = new Set(user.skills || []);
+    unstopData.skillsExtracted.forEach(s => existingSkills.add(s));
+
+    user.unstopUsername = unstopData.username;
+    user.skills = Array.from(existingSkills);
+    if (!user.externalProfileData) user.externalProfileData = {};
+    user.externalProfileData.unstop = unstopData;
+
+    await user.save();
+
+    res.json(ok('Unstop account linked & badges/skills synchronized!', {
+      unstop: unstopData,
+      updatedSkills: user.skills,
+      user: sanitizeUser(user)
+    }));
+  } catch (err: any) {
+    res.status(500).json(fail('Failed to sync Unstop account', err.message));
+  }
+});
+
+router.get('/jobs/external', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { query } = req.query;
+    const userId = (req as any).user.id;
+    const user = await UserModel.findOne({ id: userId });
+
+    const externalJobs = await scrapeExternalJobs(String(query || ''), user?.skills || []);
+    res.json(ok('External jobs scraped from Unstop & GitHub Community', externalJobs));
+  } catch (err: any) {
+    res.status(500).json(fail('Error scraping external jobs', err.message));
+  }
+});
+
 // ─── JOBS ─────────────────────────────────────────────────────────────────────
 router.get('/jobs', async (req: Request, res: Response) => {
   try {
@@ -206,21 +285,39 @@ router.post('/jobs', authenticate, requireHR, async (req: Request, res: Response
       industry: industry || hrUser?.industry || 'Technology',
     });
 
-    // Smart notification: Notify matching candidates
+    // Smart notification: Notify matching candidates & previously rejected applicants who opted in
     const candidates = await UserModel.find({ role: 'candidate' });
     const jobSkillsLower = newJob.skills.map(s => s.toLowerCase());
 
+    // Find candidates previously rejected for this company/HR
+    const rejectedApps = await ApplicationModel.find({ status: 'rejected' });
+    const rejectedCandidateIds = new Set(rejectedApps.map(a => a.candidateId));
+
     for (const cand of candidates) {
-      if (cand.skills?.some(s => jobSkillsLower.includes(s.toLowerCase()))) {
+      const hasSkillOverlap = cand.skills?.some(s => jobSkillsLower.includes(s.toLowerCase()));
+      if (hasSkillOverlap) {
+        const wasRejectedEarlier = rejectedCandidateIds.has(cand.id);
+        const isOptedIn = cand.notifyFutureJobsOnRejection !== false;
+
+        let title = `New Job Match: ${newJob.title}`;
+        let message = `${newJob.company} is hiring for ${newJob.title} in ${newJob.location}. Fits your skills!`;
+        let notifType: any = 'job_match';
+
+        if (wasRejectedEarlier && isOptedIn) {
+          title = `🎯 Future Opportunity Alert: ${newJob.title}`;
+          message = `Great news! ${newJob.company} just posted a new opening for ${newJob.title} that aligns with your skill set. Check it out and apply!`;
+          notifType = 'future_opportunity';
+        }
+
         await NotificationModel.create({
           id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           userId: cand.id,
-          type: 'job_match',
-          title: `New Job Match: ${newJob.title}`,
-          message: `${newJob.company} is hiring for ${newJob.title} in ${newJob.location}. Fits your skills!`,
+          type: notifType,
+          title,
+          message,
           read: false,
           createdAt: new Date(),
-          metadata: { jobId: newJob.id },
+          metadata: { jobId: newJob.id, company: newJob.company },
         });
       }
     }
@@ -401,12 +498,17 @@ router.patch('/applications/:id/status', authenticate, requireHR, async (req: Re
       rejected: 'Application Status Update',
     };
 
+    let notifMsg = `Your application status for ${job?.title || 'the position'} at ${job?.company || 'the company'} was updated to "${status.replace(/_/g, ' ')}".`;
+    if (status === 'rejected') {
+      notifMsg += ` Although this role was not a fit, our automated AI matcher will notify you of future openings at ${job?.company || 'our company'} matching your skills!`;
+    }
+
     await NotificationModel.create({
       id: `notif-${Date.now()}`,
       userId: app.candidateId,
       type: 'status_update',
       title: statusTitles[status] || `Application Status: ${status}`,
-      message: `Your application status for ${job?.title || 'the position'} at ${job?.company || 'the company'} was updated to "${status.replace(/_/g, ' ')}".`,
+      message: notifMsg,
       read: false,
       createdAt: new Date(),
     });

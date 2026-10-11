@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { jobsAPI, applicationsAPI } from '../api';
+import { jobsAPI, applicationsAPI, connectorsAPI } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 export default function JobsPage() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const isHR = user?.role === 'hr';
   const [jobs, setJobs] = useState<any[]>([]);
+  const [externalJobs, setExternalJobs] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'platform' | 'external'>('platform');
   const [loading, setLoading] = useState(true);
+  const [scrapingLoading, setScrapingLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [selectedJob, setSelectedJob] = useState<any>(null);
@@ -15,16 +18,24 @@ export default function JobsPage() {
   const [applied, setApplied] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState('');
 
+  // Connector sync states
+  const [syncingGithub, setSyncingGithub] = useState(false);
+  const [syncingUnstop, setSyncingUnstop] = useState(false);
+  const [githubInput, setGithubInput] = useState((user?.githubUsername as string) || '');
+  const [unstopInput, setUnstopInput] = useState((user?.unstopUsername as string) || '');
+
   const [form, setForm] = useState({
     title: '', description: '', location: '', type: 'full-time', salary: '',
     experience: '', degree: '', requirements: '', skills: '', industry: '',
   });
 
   const mySkills: string[] = user?.skills || [];
+  const extData: any = user?.externalProfileData || {};
 
   useEffect(() => {
     loadJobs();
     if (!isHR) {
+      loadExternalJobs();
       applicationsAPI.list().then((res) => {
         const ids = new Set<string>(res.data.data.map((a: any) => a.jobId));
         setApplied(ids);
@@ -40,11 +51,60 @@ export default function JobsPage() {
     jobsAPI.list(params).then((res) => setJobs(res.data.data)).finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadJobs(); }, [search, filterType]);
+  function loadExternalJobs() {
+    setScrapingLoading(true);
+    connectorsAPI.getExternalJobs(search)
+      .then((res) => setExternalJobs(res.data.data))
+      .catch(() => {})
+      .finally(() => setScrapingLoading(false));
+  }
+
+  useEffect(() => {
+    loadJobs();
+    if (!isHR) loadExternalJobs();
+  }, [search, filterType]);
 
   function showToast(msg: string) {
     setToast(msg);
-    setTimeout(() => setToast(''), 3000);
+    setTimeout(() => setToast(''), 3500);
+  }
+
+  async function handleSyncGithub() {
+    if (!githubInput.trim()) return showToast('⚠️ Enter a GitHub username');
+    setSyncingGithub(true);
+    try {
+      const res = await connectorsAPI.syncGitHub(githubInput.trim());
+      updateUser({
+        skills: res.data.data.updatedSkills,
+        githubUsername: githubInput.trim(),
+        externalProfileData: { ...extData, github: res.data.data.github },
+      });
+      showToast(`🐙 GitHub connected! Extracted ${res.data.data.github.skillsExtracted.length} skills.`);
+      loadExternalJobs();
+    } catch (err: any) {
+      showToast('❌ ' + (err.response?.data?.message || 'GitHub sync failed'));
+    } finally {
+      setSyncingGithub(false);
+    }
+  }
+
+  async function handleSyncUnstop() {
+    if (!unstopInput.trim()) return showToast('⚠️ Enter an Unstop username');
+    setSyncingUnstop(true);
+    try {
+      const res = await connectorsAPI.syncUnstop(unstopInput.trim());
+      updateUser({
+        skills: res.data.data.updatedSkills,
+        unstopUsername: unstopInput.trim(),
+        externalProfileData: { ...extData, unstop: res.data.data.unstop },
+      });
+      showToast(`🎯 Unstop connected! ${res.data.data.unstop.badges.length} badges synced.`);
+      loadExternalJobs();
+    } catch (err: any) {
+      showToast('❌ ' + (err.response?.data?.message || 'Unstop sync failed'));
+    } finally {
+      setSyncingUnstop(false);
+    }
   }
 
   async function handleCreateJob(e: React.FormEvent) {
@@ -59,7 +119,7 @@ export default function JobsPage() {
       setShowForm(false);
       setForm({ title: '', description: '', location: '', type: 'full-time', salary: '', experience: '', degree: '', requirements: '', skills: '', industry: '' });
       loadJobs();
-      showToast('✅ Job posted! Matching candidates notified.');
+      showToast('✅ Job posted! Matching candidates & previously rejected applicants notified.');
     } catch (err: any) {
       showToast('❌ ' + (err.response?.data?.message || 'Failed to post job'));
     }
@@ -88,18 +148,101 @@ export default function JobsPage() {
   return (
     <div className="page">
       {toast && (
-        <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 999, background: '#1e1b4b', color: 'white', padding: '12px 20px', borderRadius: 10, fontWeight: 600, fontSize: 14, boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
+        <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 999, background: 'var(--primary-dark)', color: 'white', padding: '12px 20px', borderRadius: 10, fontWeight: 600, fontSize: 14, boxShadow: 'var(--shadow-lg)' }}>
           {toast}
         </div>
       )}
 
+      {/* Header */}
       <div className="section-header">
         <div>
           <div className="section-title">{isHR ? '💼 Job Postings' : '🔍 Find Your Next Role'}</div>
-          <div className="section-sub">{isHR ? `${jobs.length} jobs posted by your company` : `${jobs.length} active opportunities`}</div>
+          <div className="section-sub">{isHR ? `${jobs.length} jobs posted by your company` : `${jobs.length} internal roles + ${externalJobs.length} live web-scraped opportunities`}</div>
         </div>
         {isHR && <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Post New Job</button>}
       </div>
+
+      {/* Candidate Connectors Bar (Unstop & GitHub) */}
+      {!isHR && (
+        <div className="card" style={{ marginBottom: 24, background: 'var(--primary-soft)', borderColor: 'var(--primary-light)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)' }}>
+                ⚡ Web Scraping & Profile Connectors (Unstop & GitHub)
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                Link your profiles to automatically pull public repositories, contest badges, and import verified skills into your AI job matching!
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+            {/* GitHub Connector */}
+            <div style={{ background: 'var(--bg-card)', padding: 14, borderRadius: 10, border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 20 }}>🐙</span>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>GitHub Connector</span>
+                {extData.github?.connected && <span className="badge badge-green" style={{ marginLeft: 'auto' }}>Connected ✓</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="form-input"
+                  style={{ padding: '6px 10px', fontSize: 12 }}
+                  placeholder="e.g. klsrriju or octocat"
+                  value={githubInput}
+                  onChange={(e) => setGithubInput(e.target.value)}
+                />
+                <button className="btn btn-primary btn-sm" onClick={handleSyncGithub} disabled={syncingGithub}>
+                  {syncingGithub ? 'Scraping...' : 'Sync Repo'}
+                </button>
+              </div>
+              {extData.github?.connected && (
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                  📦 {extData.github.reposCount} Repositories • Languages: {extData.github.topLanguages?.join(', ')}
+                </div>
+              )}
+            </div>
+
+            {/* Unstop Connector */}
+            <div style={{ background: 'var(--bg-card)', padding: 14, borderRadius: 10, border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 20 }}>🎯</span>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>Unstop Connector</span>
+                {extData.unstop?.connected && <span className="badge badge-green" style={{ marginLeft: 'auto' }}>Connected ✓</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="form-input"
+                  style={{ padding: '6px 10px', fontSize: 12 }}
+                  placeholder="e.g. user_unstop"
+                  value={unstopInput}
+                  onChange={(e) => setUnstopInput(e.target.value)}
+                />
+                <button className="btn btn-secondary btn-sm" onClick={handleSyncUnstop} disabled={syncingUnstop}>
+                  {syncingUnstop ? 'Scraping...' : 'Sync Badges'}
+                </button>
+              </div>
+              {extData.unstop?.connected && (
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                  🏆 {extData.unstop.competitionsCount} Challenges • Badges: {extData.unstop.badges?.slice(0, 2).join(', ')}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tabs for Candidates: Platform Jobs vs Scraped External Jobs */}
+      {!isHR && (
+        <div className="tabs" style={{ marginBottom: 16 }}>
+          <button className={`tab ${activeTab === 'platform' ? 'active' : ''}`} onClick={() => setActiveTab('platform')}>
+            🏢 Platform Openings ({jobs.length})
+          </button>
+          <button className={`tab ${activeTab === 'external' ? 'active' : ''}`} onClick={() => setActiveTab('external')}>
+            🌐 Web-Scraped Roles from Unstop & GitHub ({externalJobs.length})
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -116,62 +259,120 @@ export default function JobsPage() {
         </div>
       </div>
 
-      {loading ? (
-        <div className="loading"><div className="spinner" /></div>
-      ) : jobs.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">💼</div>
-          <div className="empty-state-text">No jobs found</div>
-          <div className="empty-state-sub">{isHR ? 'Post your first job to get started.' : 'Try adjusting your filters.'}</div>
-        </div>
-      ) : (
-        <div className="job-grid">
-          {jobs.map((job: any) => {
-            const score = getMatchScore(job);
-            const hasApplied = applied.has(job.id);
-            return (
-              <div key={job.id} className="job-card" onClick={() => setSelectedJob(job)}>
-                <div className="job-card-header">
-                  <div className="job-company-logo">{job.company?.[0] || '?'}</div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <span className={`badge ${job.status === 'active' ? 'badge-green' : 'badge-gray'}`}>{job.status}</span>
-                    <span className="badge badge-indigo">{job.type}</span>
+      {/* Internal Jobs Tab */}
+      {activeTab === 'platform' && (
+        loading ? (
+          <div className="loading"><div className="spinner" /></div>
+        ) : jobs.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">💼</div>
+            <div className="empty-state-text">No jobs found</div>
+            <div className="empty-state-sub">{isHR ? 'Post your first job to get started.' : 'Try adjusting your filters.'}</div>
+          </div>
+        ) : (
+          <div className="job-grid">
+            {jobs.map((job: any) => {
+              const score = getMatchScore(job);
+              const hasApplied = applied.has(job.id);
+              return (
+                <div key={job.id} className="job-card" onClick={() => setSelectedJob(job)}>
+                  <div className="job-card-header">
+                    <div className="job-company-logo">{job.company?.[0] || '?'}</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <span className={`badge ${job.status === 'active' ? 'badge-green' : 'badge-gray'}`}>{job.status}</span>
+                      <span className="badge badge-indigo">{job.type}</span>
+                    </div>
+                  </div>
+                  <div className="job-title">{job.title}</div>
+                  <div className="job-company">{job.company} • {job.industry}</div>
+                  <div className="job-meta">
+                    <span className="job-meta-item">📍 {job.location}</span>
+                    <span className="job-meta-item">💰 {job.salary}</span>
+                    <span className="job-meta-item">⏱ {job.experience}</span>
+                    <span className="job-meta-item">👥 {job.applicantsCount} applicants</span>
+                  </div>
+                  <div className="job-skills">
+                    {job.skills?.slice(0, 5).map((s: string) => {
+                      const matched = mySkills.map((ms) => ms.toLowerCase()).includes(s.toLowerCase());
+                      return (
+                        <span key={s} className="skill-tag" style={{ background: matched ? 'var(--green-soft)' : 'var(--primary-soft)', color: matched ? 'var(--green)' : 'var(--primary-dark)' }}>{s}</span>
+                      );
+                    })}
+                  </div>
+                  <div className="job-card-footer">
+                    {!isHR && (
+                      <span className={`match-score-badge ${score >= 80 ? 'high' : score >= 60 ? 'mid' : 'low'}`}>
+                        🎯 {score}% match
+                      </span>
+                    )}
+                    {isHR ? (
+                      <button className="btn btn-outline btn-sm" onClick={(e) => { e.stopPropagation(); window.location.href = `/jobs/${job.id}/candidates`; }}>View Candidates →</button>
+                    ) : hasApplied ? (
+                      <span className="badge badge-green">✓ Applied</span>
+                    ) : (
+                      <button className="btn btn-primary btn-sm" onClick={(e) => { e.stopPropagation(); setApplyingJob(job); }}>Apply Now</button>
+                    )}
                   </div>
                 </div>
-                <div className="job-title">{job.title}</div>
-                <div className="job-company">{job.company} • {job.industry}</div>
-                <div className="job-meta">
-                  <span className="job-meta-item">📍 {job.location}</span>
-                  <span className="job-meta-item">💰 {job.salary}</span>
-                  <span className="job-meta-item">⏱ {job.experience}</span>
-                  <span className="job-meta-item">👥 {job.applicantsCount} applicants</span>
-                </div>
-                <div className="job-skills">
-                  {job.skills?.slice(0, 5).map((s: string) => {
-                    const matched = mySkills.map((ms) => ms.toLowerCase()).includes(s.toLowerCase());
-                    return (
-                      <span key={s} className="skill-tag" style={{ background: matched ? 'var(--green-soft)' : 'var(--primary-soft)', color: matched ? 'var(--green)' : 'var(--primary-dark)' }}>{s}</span>
-                    );
-                  })}
-                </div>
-                <div className="job-card-footer">
-                  {!isHR && (
+              );
+            })}
+          </div>
+        )
+      )}
+
+      {/* External Web-Scraped Jobs Tab */}
+      {activeTab === 'external' && !isHR && (
+        scrapingLoading ? (
+          <div className="loading"><div className="spinner" /></div>
+        ) : externalJobs.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">🌐</div>
+            <div className="empty-state-text">No external jobs match your query</div>
+          </div>
+        ) : (
+          <div className="job-grid">
+            {externalJobs.map((ext: any) => {
+              const score = getMatchScore(ext);
+              return (
+                <div key={ext.id} className="job-card" style={{ borderLeft: ext.source === 'unstop' ? '4px solid #0284c7' : '4px solid #7c3aed' }}>
+                  <div className="job-card-header">
+                    <div className="job-company-logo">{ext.source === 'unstop' ? '🎯' : '🐙'}</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <span className="badge badge-blue">{ext.sourceLogo}</span>
+                      <span className="badge badge-indigo">{ext.type}</span>
+                    </div>
+                  </div>
+                  <div className="job-title">{ext.title}</div>
+                  <div className="job-company">{ext.company}</div>
+                  <div className="job-meta">
+                    <span className="job-meta-item">📍 {ext.location}</span>
+                    <span className="job-meta-item">💰 {ext.salary}</span>
+                    <span className="job-meta-item">⏱ {ext.experience}</span>
+                  </div>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '8px 0', lineHeight: 1.4 }}>
+                    {ext.description}
+                  </p>
+                  <div className="job-skills">
+                    {ext.skills?.map((s: string) => {
+                      const matched = mySkills.map((ms) => ms.toLowerCase()).includes(s.toLowerCase());
+                      return (
+                        <span key={s} className="skill-tag" style={{ background: matched ? 'var(--green-soft)' : 'var(--primary-soft)', color: matched ? 'var(--green)' : 'var(--primary-dark)' }}>{s}</span>
+                      );
+                    })}
+                  </div>
+                  <div className="job-card-footer">
                     <span className={`match-score-badge ${score >= 80 ? 'high' : score >= 60 ? 'mid' : 'low'}`}>
                       🎯 {score}% match
                     </span>
-                  )}
-                  {isHR ? (
-                    <button className="btn btn-outline btn-sm" onClick={(e) => { e.stopPropagation(); window.location.href = `/jobs/${job.id}/candidates`; }}>View Candidates →</button>
-                  ) : hasApplied ? (
-                    <span className="badge badge-green">✓ Applied</span>
-                  ) : (
-                    <button className="btn btn-primary btn-sm" onClick={(e) => { e.stopPropagation(); setApplyingJob(job); }}>Apply Now</button>
-                  )}
+                    <a href={ext.externalUrl} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">
+                      Apply on {ext.source === 'unstop' ? 'Unstop' : 'GitHub'} ↗
+                    </a>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )
       )}
 
       {/* Job Detail Modal */}
@@ -281,7 +482,7 @@ export default function JobsPage() {
         </div>
       )}
 
-      {/* Post Job Modal */}
+      {/* Post Job Modal (HR) */}
       {showForm && isHR && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
@@ -328,7 +529,7 @@ export default function JobsPage() {
               <div className="form-group">
                 <label className="form-label">Required Skills (comma-separated) <span>*</span></label>
                 <input className="form-input" placeholder="React, TypeScript, Node.js, AWS" value={form.skills} onChange={(e) => setForm((f) => ({ ...f, skills: e.target.value }))} required />
-                <div className="form-hint">These skills will be used by AI to rank candidates</div>
+                <div className="form-hint">Our AI will match active candidates and notify previously rejected applicants who match!</div>
               </div>
               <div className="form-group">
                 <label className="form-label">Job Description <span>*</span></label>
@@ -347,7 +548,7 @@ export default function JobsPage() {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Post Job & Notify Candidates 🚀</button>
+                <button type="submit" className="btn btn-primary">Post Job & Trigger AI Match Alerts 🚀</button>
               </div>
             </form>
           </div>

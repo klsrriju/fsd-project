@@ -106,7 +106,7 @@ function Sidebar() {
 }
 
 function Topbar() {
-  const { user } = useAuth();
+  const { user, theme, setTheme } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [unread, setUnread] = useState(0);
@@ -138,6 +138,23 @@ function Topbar() {
         <div className="topbar-title">{title}</div>
       </div>
       <div className="topbar-actions">
+        {/* Quick Theme Switcher */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginRight: 8 }}>
+          <span style={{ fontSize: 13 }}>🎨</span>
+          <select
+            className="form-select"
+            style={{ padding: '4px 8px', fontSize: 12, height: 32, width: 110 }}
+            value={theme}
+            onChange={(e) => setTheme(e.target.value as any)}
+          >
+            <option value="default">💜 Indigo</option>
+            <option value="dark">🌙 Dark</option>
+            <option value="emerald">🍃 Emerald</option>
+            <option value="sunset">🌅 Sunset</option>
+            <option value="ocean">🌊 Ocean</option>
+          </select>
+        </div>
+
         <button
           className="btn btn-ghost btn-icon"
           style={{ position: 'relative' }}
