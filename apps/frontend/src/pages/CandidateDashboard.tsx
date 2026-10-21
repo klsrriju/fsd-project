@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { applicationsAPI, interviewsAPI, jobsAPI } from '../api';
+import { applicationsAPI, interviewsAPI, jobsAPI, candidateStatsAPI } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 export default function CandidateDashboard() {
@@ -7,6 +7,7 @@ export default function CandidateDashboard() {
   const [applications, setApplications] = useState<any[]>([]);
   const [interviews, setInterviews] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -14,10 +15,12 @@ export default function CandidateDashboard() {
       applicationsAPI.list(),
       interviewsAPI.list(),
       jobsAPI.list(),
-    ]).then(([a, i, j]) => {
-      setApplications(a.data.data);
-      setInterviews(i.data.data);
-      setJobs(j.data.data);
+      candidateStatsAPI.get().catch(() => ({ data: { data: null } })),
+    ]).then(([a, i, j, s]) => {
+      setApplications(a.data.data || []);
+      setInterviews(i.data.data || []);
+      setJobs(j.data.data || []);
+      setStats(s.data.data);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -67,17 +70,91 @@ export default function CandidateDashboard() {
       {/* Stats */}
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
         {[
-          { label: 'Applied', value: applications.length, icon: '📋', color: 'indigo' },
-          { label: 'Shortlisted', value: applications.filter((a) => ['shortlisted', 'interview_scheduled', 'offered', 'hired'].includes(a.status)).length, icon: '⭐', color: 'purple' },
-          { label: 'Interviews', value: interviews.length, icon: '🎤', color: 'blue' },
-          { label: 'Offers', value: applications.filter((a) => ['offered', 'hired'].includes(a.status)).length, icon: '🎉', color: 'green' },
-        ].map((s, i) => (
+          { label: 'Applied', value: stats?.totalApplications ?? applications.length, icon: '📋', color: 'indigo' },
+          { label: 'Shortlisted', value: stats?.statusBreakdown?.shortlisted ?? applications.filter((a) => ['shortlisted', 'interview_scheduled', 'offered', 'hired'].includes(a.status)).length, icon: '⭐', color: 'purple' },
+          { label: 'Interviews', value: stats?.upcomingInterviews ?? interviews.filter((i) => i.status === 'scheduled').length, icon: '🎤', color: 'blue', label2: 'Upcoming' },
+          { label: 'Profile', value: `${stats?.profileCompletion ?? 0}%`, icon: '👤', color: 'green', label2: 'Complete' },
+        ].map((s: any, i) => (
           <div key={i} className={`stat-card ${s.color}`}>
             <div className={`stat-icon ${s.color}`}>{s.icon}</div>
             <div className="stat-value">{s.value}</div>
-            <div className="stat-label">{s.label}</div>
+            <div className="stat-label">{s.label2 || s.label}</div>
           </div>
         ))}
+      </div>
+
+      {/* AI Prep Action Cards */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: 16,
+        marginBottom: 24,
+      }}>
+        <div className="card" style={{
+          background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(99, 102, 241, 0.03))',
+          border: '1px solid rgba(99, 102, 241, 0.25)',
+          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 24 }}>💻</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)' }}>Technical Coding Prep</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>LeetCode Problems & Pinpoint AI Feedback</div>
+              </div>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '8px 0 16px 0', lineHeight: 1.5 }}>
+              Practice curated coding challenges with starter templates in 5 languages, instant Big-O analysis, and exact line-by-line improvement suggestions.
+            </p>
+          </div>
+          <a href="/coding-prep" className="btn btn-primary btn-sm" style={{ width: 'fit-content' }}>
+            Start Coding Practice →
+          </a>
+        </div>
+
+        <div className="card" style={{
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.03))',
+          border: '1px solid rgba(16, 185, 129, 0.25)',
+          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 24 }}>📄</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)' }}>Resume Analyzer & ATS Audit</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Skill Extraction & Presentation Audit</div>
+              </div>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '8px 0 16px 0', lineHeight: 1.5 }}>
+              Auto-extract 200+ tech skills into your profile, check ATS formatting and action verbs, and get actionable suggestions to elevate your resume.
+            </p>
+          </div>
+          <a href="/resume-analyzer" className="btn btn-outline btn-sm" style={{ width: 'fit-content' }}>
+            Audit My Resume →
+          </a>
+        </div>
+
+        <div className="card" style={{
+          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.03))',
+          border: '1px solid rgba(245, 158, 11, 0.25)',
+          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 24 }}>🎤</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)' }}>AI Mock Interview</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Honest Feedback & Motivating Coaching</div>
+              </div>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '8px 0 16px 0', lineHeight: 1.5 }}>
+              Practice behavioral and technical interview questions with honest STAR-method scoring and tailored, encouraging coaching.
+            </p>
+          </div>
+          <a href="/ai-interview" className="btn btn-outline btn-sm" style={{ width: 'fit-content' }}>
+            Practice Interview →
+          </a>
+        </div>
       </div>
 
       <div className="two-col" style={{ marginBottom: 24 }}>

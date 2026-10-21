@@ -658,3 +658,201 @@ tbody tr:last-child { border-bottom: none; }
 .funnel-track { flex: 1; height: 28px; background: var(--bg); border-radius: var(--radius-sm); overflow: hidden; }
 .funnel-fill { height: 100%; display: flex; align-items: center; padding-left: 10px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 700; color: white; transition: width 0.6s ease; }
 .funnel-count { width: 40px; font-size: 13px; font-weight: 700; color: var(--text); }
+
+/* ── 3D ANIMATIONS & MODERN UI UPGRADE ─────────────────────────────────────── */
+@keyframes float3D {
+  0%, 100% {
+    transform: translateY(0px) rotateX(0deg) rotateY(0deg);
+  }
+  50% {
+    transform: translateY(-12px) rotateX(6deg) rotateY(-6deg);
+  }
+}
+
+@keyframes floatOrb {
+  0%, 100% {
+    transform: translateY(0px) scale(1) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-16px) scale(1.05) rotate(180deg);
+  }
+}
+
+@keyframes pulseMesh {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
+}
+
+/* 3D Glassmorphism & Sign-In Page */
+.auth-page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  background: radial-gradient(circle at 20% 20%, #1e1b4b 0%, #0f172a 40%, #030712 100%);
+  overflow: hidden;
+  perspective: 1200px;
+}
+
+.auth-ambient-glow {
+  position: absolute;
+  width: 650px;
+  height: 650px;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+  animation: pulseMesh 8s ease-in-out infinite;
+}
+
+.auth-ambient-glow-1 {
+  top: -100px;
+  left: 10%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.35) 0%, rgba(168, 85, 247, 0.15) 70%, transparent 100%);
+}
+
+.auth-ambient-glow-2 {
+  bottom: -150px;
+  right: 5%;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, rgba(59, 130, 246, 0.15) 70%, transparent 100%);
+}
+
+.auth-3d-orb {
+  position: absolute;
+  border-radius: 50%;
+  box-shadow: inset -10px -10px 30px rgba(0, 0, 0, 0.5), inset 10px 10px 30px rgba(255, 255, 255, 0.4), 0 20px 40px rgba(0, 0, 0, 0.3);
+  animation: floatOrb 10s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.auth-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+  animation: float3D 6s ease-in-out infinite;
+  transition: all 0.3s ease;
+}
+
+.auth-hero-badge:hover {
+  transform: translateY(-4px) scale(1.03);
+  border-color: rgba(167, 139, 250, 0.5);
+  box-shadow: 0 15px 30px -5px rgba(99, 102, 241, 0.4);
+}
+
+.auth-card-glass {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 24px;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.15);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.btn-3d {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 6px 16px -2px rgba(79, 70, 229, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn-3d:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 12px 24px -4px rgba(79, 70, 229, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.btn-3d:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 6px -1px rgba(79, 70, 229, 0.4);
+}
+
+/* Coding checklist & interactive progress styling */
+.coding-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.coding-checklist-item:hover {
+  border-color: var(--primary);
+  transform: translateX(4px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+}
+
+.coding-checklist-item.solved {
+  background: rgba(16, 185, 129, 0.05);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.checkbox-custom {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.checkbox-custom.checked {
+  background: var(--green);
+  border-color: var(--green);
+  color: white;
+}
+
+/* Real-Time Assessment Countdown Pill */
+.timer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  background: #0f172a;
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  font-family: monospace;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
+}
+
+.timer-pill.urgent {
+  color: #f43f5e;
+  border-color: rgba(244, 63, 94, 0.4);
+  box-shadow: 0 0 20px rgba(244, 63, 94, 0.3);
+  animation: pulseMesh 1.5s infinite;
+}
+
+
+/* Modern 3D Floating Card */
+.card-3d {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+  position: relative;
+}
+
+.card-3d:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 32px -8px rgba(99, 102, 241, 0.22), 0 8px 16px -4px rgba(0, 0, 0, 0.06);
+}

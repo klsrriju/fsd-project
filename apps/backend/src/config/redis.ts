@@ -4,17 +4,24 @@ import { config } from './env';
 export const redisClient = createClient({
   socket: {
     host: config.redis.host,
-    port: config.redis.port
-  }
+    port: config.redis.port,
+    reconnectStrategy: false, // Don't loop endlessly if Redis is not running
+  },
 });
 
-redisClient.on('error', (err) => console.warn('Redis not available:', err.message));
+let errorLogged = false;
+redisClient.on('error', (err) => {
+  if (!errorLogged) {
+    console.log('ℹ️  [Redis] Optional cache not available (continuing with in-memory caching)');
+    errorLogged = true;
+  }
+});
 
 export async function initRedis() {
   try {
     await redisClient.connect();
-    console.log('Redis connected');
-  } catch (error) {
-    console.warn('Redis not available yet:', error);
+    console.log('✅ [Redis] Cache connected');
+  } catch {
+    // Redis is optional — silently continue
   }
 }

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { jobsAPI, applicationsAPI, connectorsAPI } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 export default function JobsPage() {
   const { user, updateUser } = useAuth();
+  const location = useLocation();
   const isHR = user?.role === 'hr';
   const [jobs, setJobs] = useState<any[]>([]);
   const [externalJobs, setExternalJobs] = useState<any[]>([]);
@@ -41,14 +43,25 @@ export default function JobsPage() {
         setApplied(ids);
       });
     }
-  }, []);
+  }, [location.search]);
 
   function loadJobs() {
     setLoading(true);
     const params: Record<string, string> = {};
     if (search) params.search = search;
     if (filterType) params.type = filterType;
-    jobsAPI.list(params).then((res) => setJobs(res.data.data)).finally(() => setLoading(false));
+    jobsAPI.list(params).then((res) => {
+      const list = res.data.data || [];
+      setJobs(list);
+
+      // Auto-open job from notification click-through
+      const queryParams = new URLSearchParams(location.search);
+      const targetJobId = queryParams.get('jobId');
+      if (targetJobId) {
+        const found = list.find((j: any) => j.id === targetJobId);
+        if (found) setSelectedJob(found);
+      }
+    }).finally(() => setLoading(false));
   }
 
   function loadExternalJobs() {

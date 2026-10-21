@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { notificationsAPI } from './api';
 import LoginPage from './pages/LoginPage';
+import LandingPage from './pages/LandingPage';
 import HRDashboard from './pages/HRDashboard';
 import CandidateDashboard from './pages/CandidateDashboard';
 import JobsPage from './pages/JobsPage';
@@ -10,10 +11,12 @@ import ApplicationsPage from './pages/ApplicationsPage';
 import InterviewsPage from './pages/InterviewsPage';
 import AIInterviewPage from './pages/AIInterviewPage';
 import ResumeAnalyzerPage from './pages/ResumeAnalyzerPage';
+import CodingPrepPage from './pages/CodingPrepPage';
 import CandidateRankingPage from './pages/CandidateRankingPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ProfilePage from './pages/ProfilePage';
 import './styles.css';
+
 
 function NavItem({ href, icon, label, active }: { href: string; icon: string; label: string; active: boolean }) {
   const navigate = useNavigate();
@@ -49,6 +52,7 @@ function Sidebar() {
     { href: '/interviews', icon: '📅', label: 'Interviews', section: 'main' },
     { href: '/resume-analyzer', icon: '📄', label: 'Resume Analyzer', section: 'ai' },
     { href: '/ai-interview', icon: '🎤', label: 'AI Mock Interview', section: 'ai' },
+    { href: '/coding-prep', icon: '💻', label: 'Technical Coding Prep', section: 'ai' },
     { href: '/notifications', icon: '🔔', label: 'Notifications', section: 'tools' },
     { href: '/profile', icon: '👤', label: 'My Profile', section: 'tools' },
   ];
@@ -209,13 +213,20 @@ function DashboardRouter() {
   return user?.role === 'hr' ? <HRDashboard /> : <CandidateDashboard />;
 }
 
+function PublicRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="loading"><div className="spinner" /></div>;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
+          <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route
             path="/*"
             element={
@@ -233,6 +244,7 @@ export default function App() {
                     {/* Candidate only */}
                     <Route path="/resume-analyzer" element={<CandidateRoute><ResumeAnalyzerPage /></CandidateRoute>} />
                     <Route path="/ai-interview" element={<CandidateRoute><AIInterviewPage /></CandidateRoute>} />
+                    <Route path="/coding-prep" element={<CandidateRoute><CodingPrepPage /></CandidateRoute>} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
                 </AppLayout>

@@ -7,7 +7,7 @@ type Mode = 'login' | 'register';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, register } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [role, setRole] = useState<'hr' | 'candidate'>('candidate');
   const [loading, setLoading] = useState(false);
@@ -31,7 +31,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
-      await login(form.email, form.password);
+      await login(form.email.trim(), form.password);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
@@ -40,29 +40,46 @@ export default function LoginPage() {
     }
   }
 
-  async function handleRegister(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleRegister(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!form.email || !form.password || !form.name) {
+      setError('Please fill in your name, email, and password.');
+      return;
+    }
     setError(''); setLoading(true);
     try {
       const payload: Record<string, unknown> = {
-        email: form.email, password: form.password, name: form.name, role,
+        email: form.email.trim(), password: form.password, name: form.name.trim(), role,
       };
       if (role === 'hr') {
-        Object.assign(payload, { company: form.company, industry: form.industry, companySize: form.companySize, location: form.location, website: form.website });
-      } else {
-        const skills = form.skills.split(',').map((s) => s.trim()).filter(Boolean);
         Object.assign(payload, {
-          phone: form.phone, targetRole: form.targetRole, targetIndustry: form.targetIndustry,
-          degree: form.degree, fieldOfStudy: form.fieldOfStudy, university: form.university,
-          graduationYear: form.graduationYear, yearsOfExperience: Number(form.yearsOfExperience),
-          skills, expectedSalary: form.expectedSalary, jobType: form.jobType,
-          availability: form.availability, bio: form.bio, linkedIn: form.linkedIn,
+          company: form.company.trim() || 'My Company',
+          industry: form.industry,
+          companySize: form.companySize,
+          location: form.location,
+          website: form.website,
+        });
+      } else {
+        const skills = form.skills ? form.skills.split(',').map((s) => s.trim()).filter(Boolean) : [];
+        Object.assign(payload, {
+          phone: form.phone,
+          targetRole: form.targetRole.trim() || 'Software Engineer',
+          targetIndustry: form.targetIndustry,
+          degree: form.degree,
+          fieldOfStudy: form.fieldOfStudy,
+          university: form.university,
+          graduationYear: form.graduationYear,
+          yearsOfExperience: Number(form.yearsOfExperience) || 0,
+          skills,
+          expectedSalary: form.expectedSalary,
+          jobType: form.jobType,
+          availability: form.availability,
+          bio: form.bio,
+          linkedIn: form.linkedIn,
           portfolioUrl: form.portfolioUrl,
         });
       }
-      const res = await authAPI.register(payload);
-      localStorage.setItem('token', res.data.data.token);
-      localStorage.setItem('user', JSON.stringify(res.data.data.user));
+      await register(payload);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed.');
@@ -78,51 +95,129 @@ export default function LoginPage() {
 
   return (
     <div className="auth-page">
+      {/* 3D Ambient Lighting & Floating Orbs */}
+      <div className="auth-ambient-glow auth-ambient-glow-1" />
+      <div className="auth-ambient-glow auth-ambient-glow-2" />
+      <div className="auth-3d-orb" style={{ width: 140, height: 140, top: '15%', right: '42%', background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.2))' }} />
+      <div className="auth-3d-orb" style={{ width: 80, height: 80, bottom: '12%', left: '38%', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.4), rgba(59, 130, 246, 0.2))', animationDelay: '-4s' }} />
+
       {/* Left panel */}
-      <div className="auth-left">
+      <div className="auth-left" style={{ position: 'relative', zIndex: 10 }}>
         <div className="auth-logo">
-          <div className="auth-logo-icon">R</div>
-          <span className="auth-logo-text">RecruitIQ</span>
+          <div className="auth-logo-icon" style={{
+            background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+            boxShadow: '0 8px 24px -4px rgba(99, 102, 241, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.3)',
+            transform: 'rotate(-4deg)',
+          }}>R</div>
+          <span className="auth-logo-text" style={{ letterSpacing: '-0.02em', fontSize: 24, fontWeight: 800 }}>RecruitIQ</span>
         </div>
-        <h1 className="auth-headline">
-          Hire smarter<br />with <span>AI-powered</span><br />recruitment
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
+          <div className="auth-hero-badge" style={{ animationDelay: '0s' }}>
+            <span>⚡</span> <span>98% Match Accuracy • Gemini AI</span>
+          </div>
+          <div className="auth-hero-badge" style={{ animationDelay: '-2s' }}>
+            <span>💻</span> <span>20+ Real LeetCode Patterns</span>
+          </div>
+          <div className="auth-hero-badge" style={{ animationDelay: '-4s' }}>
+            <span>🎯</span> <span>Live Technical Assessments</span>
+          </div>
+        </div>
+
+        <h1 className="auth-headline" style={{ textShadow: '0 4px 20px rgba(0,0,0,0.4)' }}>
+          Hire smarter<br />with <span style={{
+            background: 'linear-gradient(135deg, #a78bfa, #38bdf8)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>AI-powered</span><br />recruitment
         </h1>
-        <p className="auth-sub">
-          Connect top talent with great companies. Our AI matches candidates to jobs, analyzes resumes, and streamlines the entire hiring process.
+        <p className="auth-sub" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
+          Connect top talent with great companies. Our AI matches candidates to jobs, analyzes resumes, and conducts realistic technical interview assessments.
         </p>
+
         <div className="auth-features">
           {[
-            { icon: '🤖', text: 'AI-powered resume matching & ranking' },
-            { icon: '📊', text: 'Smart analytics & hiring funnel insights' },
-            { icon: '🎯', text: 'Personalized job recommendations' },
-            { icon: '🎤', text: 'AI demo interview practice sessions' },
+            { icon: '🤖', text: 'AI-powered resume matching & ATS structure audit' },
+            { icon: '💻', text: 'Interactive LeetCode coding prep & timed assessments' },
+            { icon: '📊', text: 'Smart analytics & candidate pipeline insights' },
+            { icon: '🎤', text: 'Honest STAR-method behavioral mock interviews' },
           ].map((f, i) => (
-            <div key={i} className="auth-feature">
-              <div className="auth-feature-icon">{f.icon}</div>
+            <div key={i} className="auth-feature" style={{
+              background: 'rgba(255, 255, 255, 0.04)',
+              padding: '8px 14px',
+              borderRadius: 12,
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              backdropFilter: 'blur(8px)',
+            }}>
+              <div className="auth-feature-icon" style={{ background: 'rgba(255, 255, 255, 0.12)' }}>{f.icon}</div>
               <span className="auth-feature-text">{f.text}</span>
             </div>
           ))}
         </div>
 
         {/* Demo credentials */}
-        <div style={{ marginTop: 32, background: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: '16px 20px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.6, marginBottom: 12 }}>Demo Accounts (password: password123)</div>
-          {demoCredentials.map((d) => (
-            <div key={d.email} style={{ fontSize: 13, opacity: 0.85, marginBottom: 6 }}>
-              <strong>{d.role}:</strong> {d.email}
+        <div style={{
+          marginTop: 32,
+          background: 'rgba(255, 255, 255, 0.06)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          backdropFilter: 'blur(16px)',
+          borderRadius: 16,
+          padding: '18px 24px',
+          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.25)',
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#a78bfa', marginBottom: 12 }}>
+            ⚡ Instant Demo Accounts (password: password123)
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                padding: '10px 14px',
+                borderRadius: 10,
+                cursor: 'pointer',
+                border: '1px solid rgba(255,255,255,0.08)',
+                transition: 'all 0.2s',
+              }}
+              onClick={() => { set('email', 'sarah@techcorp.com'); set('password', 'password123'); }}
+            >
+              <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 700 }}>👔 HR Recruiter</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'white', marginTop: 2 }}>sarah@techcorp.com</div>
             </div>
-          ))}
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                padding: '10px 14px',
+                borderRadius: 10,
+                cursor: 'pointer',
+                border: '1px solid rgba(255,255,255,0.08)',
+                transition: 'all 0.2s',
+              }}
+              onClick={() => { set('email', 'alex@gmail.com'); set('password', 'password123'); }}
+            >
+              <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 700 }}>👤 Candidate</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'white', marginTop: 2 }}>alex@gmail.com</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Right panel */}
-      <div className="auth-right">
+      {/* Right panel with 3D Glassmorphism */}
+      <div className="auth-right" style={{
+        position: 'relative',
+        zIndex: 10,
+        margin: '24px 32px',
+        borderRadius: 24,
+        background: 'rgba(255, 255, 255, 0.96)',
+        backdropFilter: 'blur(30px)',
+        boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.6), 0 0 50px rgba(99, 102, 241, 0.2)',
+        border: '1px solid rgba(255, 255, 255, 0.8)',
+      }}>
         {mode === 'login' ? (
           <>
-            <h2 className="auth-form-title">Welcome back</h2>
-            <p className="auth-form-sub">Sign in to your RecruitIQ account</p>
+            <h2 className="auth-form-title" style={{ fontSize: 28, fontWeight: 800 }}>Welcome back</h2>
+            <p className="auth-form-sub" style={{ marginBottom: 24 }}>Sign in to your RecruitIQ account</p>
 
-            {error && <div className="alert alert-error">{error}</div>}
+            {error && <div className="alert alert-error" style={{ borderRadius: 12, marginBottom: 18 }}>{error}</div>}
 
             <form onSubmit={handleLogin}>
               <div className="form-group">
@@ -244,9 +339,16 @@ export default function LoginPage() {
                     </div>
                   </>
                 )}
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
                   <button type="button" className="btn btn-ghost" onClick={() => setStep(1)}>← Back</button>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Continue →</button>
+                  <button type="button" className="btn btn-primary" onClick={() => handleRegister()} style={{ flex: 1 }} disabled={loading}>
+                    {loading ? 'Creating account...' : '🚀 Register & Enter'}
+                  </button>
+                </div>
+                <div style={{ marginTop: 10, textAlign: 'center' }}>
+                  <button type="submit" className="btn btn-link btn-sm" style={{ fontSize: 13, color: 'var(--primary)' }}>
+                    or add more profile details (Optional) →
+                  </button>
                 </div>
               </form>
             )}

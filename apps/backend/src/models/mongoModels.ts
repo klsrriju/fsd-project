@@ -29,8 +29,16 @@ export interface IUser extends Document {
   resumeUrl?: string;
   themePreference?: 'default' | 'dark' | 'emerald' | 'sunset' | 'ocean';
   githubUsername?: string;
+  githubAccessToken?: string;
   unstopUsername?: string;
   notifyFutureJobsOnRejection?: boolean;
+  smsConsent?: boolean;
+  smsPreferences?: {
+    interviews?: boolean;
+    statusUpdates?: boolean;
+    feedback?: boolean;
+    jobAlerts?: boolean;
+  };
   externalProfileData?: {
     github?: {
       connected: boolean;
@@ -40,6 +48,13 @@ export interface IUser extends Document {
       bio?: string;
       avatarUrl?: string;
       scrapedAt?: Date;
+      featuredRepos?: Array<{
+        name: string;
+        description?: string;
+        language?: string;
+        stars?: number;
+        url: string;
+      }>;
     };
     unstop?: {
       connected: boolean;
@@ -47,8 +62,20 @@ export interface IUser extends Document {
       competitionsCount?: number;
       skills?: string[];
       scrapedAt?: Date;
+      customAchievements?: Array<{
+        title: string;
+        issuer?: string;
+        date?: string;
+        verificationUrl?: string;
+        isSelfReported: boolean;
+      }>;
     };
   };
+  codingProgress?: {
+    solvedProblems?: string[];
+    lastActive?: Date;
+  };
+  codingTestHistory?: Array<any>;
   createdAt: Date;
 }
 
@@ -81,9 +108,19 @@ const UserSchema = new Schema<IUser>({
   resumeUrl: { type: String },
   themePreference: { type: String, default: 'default' },
   githubUsername: { type: String },
+  githubAccessToken: { type: String },
   unstopUsername: { type: String },
   notifyFutureJobsOnRejection: { type: Boolean, default: true },
+  smsConsent: { type: Boolean, default: false },
+  smsPreferences: {
+    interviews: { type: Boolean, default: true },
+    statusUpdates: { type: Boolean, default: true },
+    feedback: { type: Boolean, default: true },
+    jobAlerts: { type: Boolean, default: true },
+  },
   externalProfileData: { type: Schema.Types.Mixed, default: {} },
+  codingProgress: { type: Schema.Types.Mixed, default: { solvedProblems: [] } },
+  codingTestHistory: { type: Schema.Types.Mixed, default: [] },
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -147,16 +184,23 @@ export interface IApplication extends Document {
   resumeFeedback?: string;
   notes?: string;
   futureJobAlertSent?: boolean;
+  // Rejection feedback workflow
+  feedbackRequested?: boolean;
+  feedbackRequestedAt?: Date;
+  feedbackStatus?: 'none' | 'pending' | 'responded' | 'closed';
+  feedbackMessage?: string;
+  feedbackRespondedAt?: Date;
+  feedbackRespondedBy?: string; // HR user id
 }
 
 const ApplicationSchema = new Schema<IApplication>({
   id: { type: String, required: true, unique: true },
   jobId: { type: String, required: true },
   candidateId: { type: String, required: true },
-  status: { 
-    type: String, 
+  status: {
+    type: String,
     enum: ['applied', 'shortlisted', 'interview_scheduled', 'interviewed', 'offered', 'hired', 'rejected'],
-    default: 'applied' 
+    default: 'applied'
   },
   appliedAt: { type: Date, default: Date.now },
   matchScore: { type: Number, required: true },
@@ -166,7 +210,13 @@ const ApplicationSchema = new Schema<IApplication>({
   aiAnalysis: { type: String },
   resumeFeedback: { type: String },
   notes: { type: String },
-  futureJobAlertSent: { type: Boolean, default: false }
+  futureJobAlertSent: { type: Boolean, default: false },
+  feedbackRequested: { type: Boolean, default: false },
+  feedbackRequestedAt: { type: Date },
+  feedbackStatus: { type: String, enum: ['none', 'pending', 'responded', 'closed'], default: 'none' },
+  feedbackMessage: { type: String },
+  feedbackRespondedAt: { type: Date },
+  feedbackRespondedBy: { type: String },
 });
 
 export const ApplicationModel = mongoose.model<IApplication>('Application', ApplicationSchema);
@@ -208,12 +258,13 @@ export const InterviewModel = mongoose.model<IInterview>('Interview', InterviewS
 export interface INotification extends Document {
   id: string;
   userId: string;
-  type: 'job_match' | 'status_update' | 'interview_scheduled' | 'application_received' | 'future_opportunity';
+  type: 'job_match' | 'status_update' | 'interview_scheduled' | 'application_received' | 'future_opportunity' | 'feedback_requested' | 'feedback_responded';
   title: string;
   message: string;
   read: boolean;
   createdAt: Date;
   metadata?: Record<string, any>;
+  route?: string; // Frontend route to navigate to on click
 }
 
 const NotificationSchema = new Schema<INotification>({
@@ -224,7 +275,8 @@ const NotificationSchema = new Schema<INotification>({
   message: { type: String, required: true },
   read: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
-  metadata: { type: Schema.Types.Mixed }
+  metadata: { type: Schema.Types.Mixed },
+  route: { type: String },
 });
 
 export const NotificationModel = mongoose.model<INotification>('Notification', NotificationSchema);

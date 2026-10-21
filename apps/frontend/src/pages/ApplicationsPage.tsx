@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { applicationsAPI, interviewsAPI } from '../api';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,6 +25,7 @@ const STAGE_LABELS: Record<string, string> = {
 
 export default function ApplicationsPage() {
   const { user } = useAuth();
+  const location = useLocation();
   const isHR = user?.role === 'hr';
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,39 +34,148 @@ export default function ApplicationsPage() {
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
   const [filterJob, setFilterJob] = useState('');
   const [toast, setToast] = useState('');
+  const [feedbackReplyApp, setFeedbackReplyApp] = useState<any>(null);
+  const [feedbackReplyText, setFeedbackReplyText] = useState('');
+  const [feedbackSaving, setFeedbackSaving] = useState(false);
+
+  // Candidate WhatsApp & SMS notification states
+  const [notificationAlert, setNotificationAlert] = useState<{
+    candidateName: string;
+    phone: string;
+    status: string;
+    message: string;
+    whatsappUrl: string;
+  } | null>(null);
+  const [customNotifyApp, setCustomNotifyApp] = useState<any>(null);
+  const [customNotifyText, setCustomNotifyText] = useState('');
+  const [customNotifyChannel, setCustomNotifyChannel] = useState<'whatsapp' | 'sms'>('whatsapp');
+  const [customNotifySending, setCustomNotifySending] = useState(false);
 
   const [scheduleForm, setScheduleForm] = useState({
     scheduledAt: '', duration: '60', mode: 'video', platform: 'google_meet', meetLink: '', notes: '',
   });
 
-  useEffect(() => { loadApplications(); }, [filterJob]);
+  useEffect(() => { loadApplications(); }, [filterJob, location.search]);
 
   function loadApplications() {
     setLoading(true);
     const params: Record<string, string> = {};
     if (filterJob) params.jobId = filterJob;
-    applicationsAPI.list(params).then((res) => setApplications(res.data.data)).finally(() => setLoading(false));
+    applicationsAPI.list(params).then((res) => {
+      const list = res.data.data || [];
+      setApplications(list);
+
+      // Auto-open record from notification click-through
+      const queryParams = new URLSearchParams(location.search);
+      const targetAppId = queryParams.get('appId');
+      if (targetAppId) {
+        const found = list.find((a: any) => a.id === targetAppId);
+        if (found) setSelectedApp(found);
+      }
+    }).finally(() => setLoading(false));
   }
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000); }
 
   async function updateStatus(appId: string, status: string, notes?: string) {
-    await applicationsAPI.updateStatus(appId, status, notes);
-    loadApplications();
-    showToast(`✅ Status updated to "${STAGE_LABELS[status]}"`);
+    try {
+      const res = await applicationsAPI.updateStatus(appId, status, notes);
+      loadApplications();
+      const resData = res.data?.data;
+      if (resData?.whatsappUrl && ['shortlisted', 'interview_scheduled', 'rejected', 'offered', 'hired'].includes(status)) {
+        setNotificationAlert({
+          candidateName: resData.candidate?.name || 'Candidate',
+          phone: resData.recipientPhone || resData.candidate?.phone || '',
+          status,
+          message: resData.directMessage || '',
+          whatsappUrl: resData.whatsappUrl,
+        });
+        showToast(`✅ Status updated to "${STAGE_LABELS[status]}" • SMS/WhatsApp alert sent to candidate!`);
+      } else {
+        showToast(`✅ Status updated to "${STAGE_LABELS[status]}"`);
+      }
+    } catch (err: any) {
+      showToast('❌ ' + (err.response?.data?.message || 'Failed to update status'));
+    }
+  }
+
+  async function handleSendCustomNotification(e: React.FormEvent) {
+    e.preventDefault();
+    if (!customNotifyApp) return;
+    setCustomNotifySending(true);
+    try {
+      const res = await applicationsAPI.notifyCandidate(customNotifyApp.id, {
+        message: customNotifyText.trim(),
+        channel: customNotifyChannel,
+      });
+      const resData = res.data?.data;
+      setCustomNotifyApp(null);
+      setCustomNotifyText('');
+      if (resData?.whatsappUrl) {
+        setNotificationAlert({
+          candidateName: customNotifyApp.candidate?.name || 'Candidate',
+          phone: resData.phone || customNotifyApp.candidate?.phone || '',
+          status: customNotifyApp.status,
+          message: resData.message,
+          whatsappUrl: resData.whatsappUrl,
+        });
+      }
+      showToast(`✅ Notification sent to candidate via ${customNotifyChannel.toUpperCase()}!`);
+    } catch (err: any) {
+      showToast('❌ ' + (err.response?.data?.message || 'Failed to send notification'));
+    } finally {
+      setCustomNotifySending(false);
+    }
+  }
+
+  async function requestFeedback(appId: string) {
+    try {
+      await applicationsAPI.requestFeedback(appId);
+      loadApplications();
+      setSelectedApp(null);
+      showToast('✅ Feedback request sent to HR.');
+    } catch (err: any) {
+      showToast('❌ ' + (err.response?.data?.message || 'Failed to send feedback request'));
+    }
+  }
+
+  async function submitFeedbackReply(e: React.FormEvent) {
+    e.preventDefault();
+    setFeedbackSaving(true);
+    try {
+      await applicationsAPI.respondFeedback(feedbackReplyApp.id, feedbackReplyText);
+      setFeedbackReplyApp(null);
+      setFeedbackReplyText('');
+      loadApplications();
+      showToast('✅ Feedback sent to candidate.');
+    } catch (err: any) {
+      showToast('❌ ' + (err.response?.data?.message || 'Failed to submit feedback'));
+    } finally {
+      setFeedbackSaving(false);
+    }
   }
 
   async function scheduleInterview(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await interviewsAPI.schedule({
+      const res = await interviewsAPI.schedule({
         applicationId: scheduleApp.id,
         ...scheduleForm,
         duration: Number(scheduleForm.duration),
       });
-      await updateStatus(scheduleApp.id, 'interview_scheduled');
+      loadApplications();
       setScheduleApp(null);
-      showToast('✅ Interview scheduled! Candidate has been notified.');
+      const resData = res.data?.data;
+      if (resData?.whatsappUrl) {
+        setNotificationAlert({
+          candidateName: scheduleApp.candidate?.name || resData.candidate?.name || 'Candidate',
+          phone: resData.recipientPhone || scheduleApp.candidate?.phone || '',
+          status: 'interview_scheduled',
+          message: resData.directMessage || '',
+          whatsappUrl: resData.whatsappUrl,
+        });
+      }
+      showToast('✅ Interview scheduled! Candidate has been notified via SMS & WhatsApp.');
     } catch (err: any) {
       showToast('❌ ' + (err.response?.data?.message || 'Scheduling failed'));
     }
@@ -257,11 +368,71 @@ export default function ApplicationsPage() {
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Candidate Info</div>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{selectedApp.candidate.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selectedApp.candidate.email}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{selectedApp.candidate.yearsOfExperience} yrs exp • {selectedApp.candidate.targetRole}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selectedApp.candidate.degree} in {selectedApp.candidate.fieldOfStudy}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selectedApp.candidate.university} ({selectedApp.candidate.graduationYear})</div>
-                  {selectedApp.resumeUrl && (
-                    <a href={selectedApp.resumeUrl} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ marginTop: 10, display: 'inline-flex' }}>📄 View Resume</a>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                    {selectedApp.candidate.yearsOfExperience} yrs exp • {selectedApp.candidate.targetRole || 'Candidate'}
+                  </div>
+                  {(selectedApp.candidate.degree || selectedApp.candidate.fieldOfStudy) && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {selectedApp.candidate.degree} in {selectedApp.candidate.fieldOfStudy}
+                    </div>
+                  )}
+                  {selectedApp.candidate.university && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {selectedApp.candidate.university} {selectedApp.candidate.graduationYear ? `(${selectedApp.candidate.graduationYear})` : ''}
+                    </div>
+                  )}
+                  {selectedApp.candidate.phone && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                      📞 {selectedApp.candidate.phone}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                    {selectedApp.resumeUrl && (
+                      <a href={selectedApp.resumeUrl} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ display: 'inline-flex' }}>📄 View Resume</a>
+                    )}
+                    {selectedApp.candidate.phone && (
+                      <>
+                        <a
+                          href={`https://wa.me/${selectedApp.candidate.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi ${selectedApp.candidate.name}, congratulations! Reaching out from ${selectedApp.job?.company || 'our company'} regarding your application for ${selectedApp.job?.title || 'the position'}: http://localhost:5173/applications`)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-sm"
+                          style={{ background: '#25D366', color: '#fff', border: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 6, textDecoration: 'none' }}
+                        >
+                          <span>💬</span> WhatsApp Candidate
+                        </a>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12 }}
+                          onClick={() => {
+                            setCustomNotifyApp(selectedApp);
+                            setCustomNotifyText(`🎉 Hi ${selectedApp.candidate.name}, congratulations! Regarding your application for ${selectedApp.job?.title || 'the position'} at ${selectedApp.job?.company || 'our company'}, we are pleased to inform you that you have been ${selectedApp.status === 'hired' ? 'selected and hired' : selectedApp.status === 'offered' ? 'offered the position' : 'shortlisted'}! View details: http://localhost:5173/applications`);
+                          }}
+                        >
+                          <span>📲</span> Send Custom Notification
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Candidate Certificates & Evidence */}
+                  {selectedApp.candidate.externalProfileData?.unstop?.customAchievements?.length > 0 && (
+                    <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>
+                        🏅 Verified Credentials ({selectedApp.candidate.externalProfileData.unstop.customAchievements.length})
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {selectedApp.candidate.externalProfileData.unstop.customAchievements.map((ach: any, idx: number) => (
+                          <div key={idx} style={{ fontSize: 11, background: 'var(--primary-soft)', padding: '6px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span><strong>[{ach.category || 'Achievement'}]</strong> {ach.title}</span>
+                            {ach.certificateFile && (
+                              <a href={ach.certificateFile} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>View Doc ↗</a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -283,6 +454,70 @@ export default function ApplicationsPage() {
             {selectedApp.notes && (
               <div className="alert alert-warning">
                 <span>📝</span> <strong>HR Notes:</strong> {selectedApp.notes}
+              </div>
+            )}
+
+            {/* ─── REJECTION FEEDBACK SECTION ─── */}
+            {selectedApp.status === 'rejected' && !isHR && (
+              <div style={{ background: 'var(--bg)', borderRadius: 12, padding: 16, marginBottom: 16, border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>
+                  💬 Rejection Feedback
+                </div>
+                {selectedApp.feedbackStatus === 'responded' || selectedApp.feedbackMessage ? (
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600, marginBottom: 6 }}>✅ HR has responded to your feedback request</div>
+                    <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, whiteSpace: 'pre-wrap', background: 'var(--primary-soft)', padding: 12, borderRadius: 8 }}>
+                      {selectedApp.feedbackMessage}
+                    </div>
+                    {selectedApp.feedbackRespondedAt && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                        Responded on {new Date(selectedApp.feedbackRespondedAt).toLocaleDateString()}
+                      </div>
+                    )}
+                  </div>
+                ) : selectedApp.feedbackStatus === 'pending' || selectedApp.feedbackRequested ? (
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    ⏳ Your feedback request is pending HR's response.
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 10px 0' }}>
+                      Would you like to request an explanation for this rejection?
+                    </p>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      onClick={() => requestFeedback(selectedApp.id)}
+                    >
+                      📝 Request Rejection Feedback
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* HR: show pending feedback request badge */}
+            {isHR && selectedApp.feedbackStatus === 'pending' && (
+              <div className="alert alert-warning" style={{ marginBottom: 12 }}>
+                <span>📝</span> <strong>Candidate has requested rejection feedback.</strong>
+                <button
+                  className="btn btn-primary btn-sm"
+                  style={{ marginLeft: 12 }}
+                  onClick={() => { setFeedbackReplyApp(selectedApp); setSelectedApp(null); }}
+                >
+                  Reply Now
+                </button>
+              </div>
+            )}
+
+            {/* HR: show submitted feedback */}
+            {isHR && selectedApp.feedbackMessage && (
+              <div style={{ background: 'var(--bg)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  💬 Feedback You Sent
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                  {selectedApp.feedbackMessage}
+                </div>
               </div>
             )}
 
@@ -377,6 +612,185 @@ export default function ApplicationsPage() {
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost" onClick={() => setScheduleApp(null)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Schedule & Notify Candidate 📅</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* HR Feedback Reply Modal */}
+      {feedbackReplyApp && (
+        <div className="modal-overlay" onClick={() => setFeedbackReplyApp(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <div className="modal-title">📝 Provide Rejection Feedback</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  {feedbackReplyApp.candidate?.name} — {feedbackReplyApp.job?.title}
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => setFeedbackReplyApp(null)}>✕</button>
+            </div>
+            <form onSubmit={submitFeedbackReply}>
+              <div className="form-group">
+                <label className="form-label">Rejection Explanation <span>*</span></label>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  Be specific and respectful. Focus on skills, experience, or role fit — not personal characteristics.
+                </div>
+                <textarea
+                  className="form-textarea"
+                  rows={5}
+                  required
+                  minLength={10}
+                  placeholder="e.g. We were looking for a candidate with 5+ years of experience with React and AWS. While your overall profile was strong, we found a closer match for this specific role. We encourage you to develop your cloud infrastructure skills and apply again in the future."
+                  value={feedbackReplyText}
+                  onChange={(e) => setFeedbackReplyText(e.target.value)}
+                />
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setFeedbackReplyApp(null)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={feedbackSaving}>
+                  {feedbackSaving ? 'Sending...' : '💬 Send Feedback to Candidate'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Candidate WhatsApp / SMS Notification Alert Modal */}
+      {notificationAlert && (
+        <div className="modal-overlay" onClick={() => setNotificationAlert(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, border: '2px solid #22c55e' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ fontSize: 32, background: 'rgba(34, 197, 94, 0.15)', width: 48, height: 48, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  📱
+                </div>
+                <div>
+                  <div className="modal-title" style={{ color: '#22c55e' }}>Candidate Notification Prepared!</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    {notificationAlert.candidateName} • 📞 {notificationAlert.phone || 'No phone'}
+                  </div>
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => setNotificationAlert(null)}>✕</button>
+            </div>
+
+            <div style={{ padding: '8px 0 16px' }}>
+              <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, marginBottom: 16, border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  💬 Message Generated
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: 'var(--text)' }}>
+                  {notificationAlert.message}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {notificationAlert.whatsappUrl && (
+                  <a
+                    href={notificationAlert.whatsappUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      background: '#25D366',
+                      borderColor: '#25D366',
+                      color: '#fff',
+                      fontWeight: 700,
+                      padding: '12px 18px',
+                      fontSize: 15,
+                      borderRadius: 8,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <span>💬</span> Open WhatsApp Chat Now
+                  </a>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                  onClick={() => {
+                    navigator.clipboard?.writeText(notificationAlert.message);
+                    showToast('📋 Message copied to clipboard!');
+                  }}
+                >
+                  <span>📋</span> Copy Message Text
+                </button>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setNotificationAlert(null)}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HR Custom Send WhatsApp / SMS Modal */}
+      {customNotifyApp && (
+        <div className="modal-overlay" onClick={() => setCustomNotifyApp(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div className="modal-header">
+              <div>
+                <div className="modal-title">📲 Send Candidate Message</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  To: {customNotifyApp.candidate?.name} (📞 {customNotifyApp.candidate?.phone || 'No phone registered'})
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => setCustomNotifyApp(null)}>✕</button>
+            </div>
+
+            <form onSubmit={handleSendCustomNotification}>
+              <div className="form-group">
+                <label className="form-label">Delivery Channel</label>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                    <input
+                      type="radio"
+                      name="channel"
+                      value="whatsapp"
+                      checked={customNotifyChannel === 'whatsapp'}
+                      onChange={() => setCustomNotifyChannel('whatsapp')}
+                    />
+                    <span>💬 WhatsApp</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                    <input
+                      type="radio"
+                      name="channel"
+                      value="sms"
+                      checked={customNotifyChannel === 'sms'}
+                      onChange={() => setCustomNotifyChannel('sms')}
+                    />
+                    <span>📱 SMS Text</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Message <span>*</span></label>
+                <textarea
+                  className="form-textarea"
+                  rows={4}
+                  required
+                  value={customNotifyText}
+                  onChange={(e) => setCustomNotifyText(e.target.value)}
+                  placeholder="Enter message to send..."
+                />
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setCustomNotifyApp(null)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={customNotifySending}>
+                  {customNotifySending ? 'Sending...' : '🚀 Send & Generate Link'}
+                </button>
               </div>
             </form>
           </div>

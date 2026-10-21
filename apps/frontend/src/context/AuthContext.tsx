@@ -27,6 +27,7 @@ interface AuthContextType {
   theme: ThemeName;
   setTheme: (theme: ThemeName) => void;
   login: (email: string, password: string) => Promise<void>;
+  register: (payload: Record<string, unknown>) => Promise<User>;
   logout: () => void;
   updateUser: (data: Partial<User>) => void;
 }
@@ -44,11 +45,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedTheme = (localStorage.getItem('themePreference') as ThemeName) || 'default';
     
     if (token && storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser);
-      const userTheme = (parsedUser.themePreference as ThemeName) || storedTheme;
-      setThemeState(userTheme);
-      applyThemeToDocument(userTheme);
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
+        const userTheme = (parsedUser.themePreference as ThemeName) || storedTheme;
+        setThemeState(userTheme);
+        applyThemeToDocument(userTheme);
+      } catch {}
+
+      // Refresh latest profile from backend asynchronously
+      authAPI.me()
+        .then((res) => {
+          if (res.data?.data) {
+            setUser(res.data.data);
+            localStorage.setItem('user', JSON.stringify(res.data.data));
+            if (res.data.data.themePreference) {
+              setThemeState(res.data.data.themePreference);
+              applyThemeToDocument(res.data.data.themePreference);
+            }
+          }
+        })
+        .catch(() => {});
     } else {
       setThemeState(storedTheme);
       applyThemeToDocument(storedTheme);
@@ -71,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    const res = await authAPI.login(email, password);
+    const res = await authAPI.login(email.trim(), password);
     const { token, user: userData } = res.data.data;
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
@@ -81,6 +98,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const register = async (payload: Record<string, unknown>) => {
+    const res = await authAPI.register(payload);
+    const { token, user: userData } = res.data.data;
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+    if (userData.themePreference) {
+      setTheme(userData.themePreference);
+    }
+    return userData;
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -88,13 +117,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updateUser = (data: Partial<User>) => {
-    const updated = { ...user, ...data } as User;
-    localStorage.setItem('user', JSON.stringify(updated));
-    setUser(updated);
+    setUser((prev) => {
+      const updated = { ...(prev || {}), ...data } as User;
+      localStorage.setItem('user', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, theme, setTheme, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, theme, setTheme, login, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

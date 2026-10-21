@@ -14,11 +14,13 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 globally
+// Handle 401 globally (except on login/register auth routes)
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const url = err.config?.url || '';
+    const isAuthRoute = url.includes('/auth/login') || url.includes('/auth/register');
+    if (err.response?.status === 401 && !isAuthRoute) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
@@ -61,12 +63,36 @@ export const applicationsAPI = {
     api.post('/applications', data),
   updateStatus: (id: string, status: string, notes?: string) =>
     api.patch(`/applications/${id}/status`, { status, notes }),
+  notifyCandidate: (id: string, data?: { message?: string; channel?: 'whatsapp' | 'sms' }) =>
+    api.post(`/applications/${id}/notify-candidate`, data || {}),
+  requestFeedback: (id: string) =>
+    api.post(`/applications/${id}/feedback-request`, {}),
+  respondFeedback: (id: string, feedbackMessage: string) =>
+    api.put(`/applications/${id}/feedback-response`, { feedbackMessage }),
+  getFeedbackRequests: () =>
+    api.get('/applications/feedback-requests'),
 };
 
 // Resume
 export const resumeAPI = {
   analyze: (data: Record<string, unknown>) =>
     api.post('/resume/analyze', data),
+  extractSkills: (data: { resumeText: string }) =>
+    api.post('/resume/extract-skills', data),
+};
+
+// Technical Coding Interview Prep (LeetCode style) & Real Interview Test
+export const codingAPI = {
+  getProblems: () => api.get('/coding/problems'),
+  evaluateCode: (data: { problemId: string; language: string; code: string }) =>
+    api.post('/coding/evaluate', data),
+  getProgress: () => api.get('/coding/progress'),
+  updateProgress: (problemId: string, solved: boolean) =>
+    api.post('/coding/progress', { problemId, solved }),
+  startTest: (type?: string) => api.post('/coding/test/start', { type }),
+  submitTest: (data: { testId: string; submissions: Array<{ problemId: string; language: string; code: string }> }) =>
+    api.post('/coding/test/submit', data),
+  getTestHistory: () => api.get('/coding/test/history'),
 };
 
 // Interviews
@@ -97,8 +123,14 @@ export const notificationsAPI = {
 export const connectorsAPI = {
   syncGitHub: (username: string) =>
     api.post('/connectors/github/sync', { username }),
+  disconnectGitHub: () =>
+    api.post('/connectors/github/disconnect', {}),
   syncUnstop: (username: string) =>
     api.post('/connectors/unstop/sync', { username }),
+  addUnstopAchievement: (data: Record<string, unknown>) =>
+    api.post('/connectors/unstop/achievements', data),
+  deleteUnstopAchievement: (id: string) =>
+    api.delete(`/connectors/unstop/achievements/${id}`),
   getExternalJobs: (query?: string) =>
     api.get('/jobs/external', { params: { query } }),
 };
@@ -108,3 +140,12 @@ export const analyticsAPI = {
   get: () => api.get('/analytics'),
 };
 
+// Candidate Dashboard Stats
+export const candidateStatsAPI = {
+  get: () => api.get('/candidate/stats'),
+};
+
+// Candidates Talent Pool (HR)
+export const candidatesAPI = {
+  list: () => api.get('/candidates'),
+};
