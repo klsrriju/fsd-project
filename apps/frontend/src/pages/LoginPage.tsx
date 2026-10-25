@@ -156,19 +156,23 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right panel with 3D Glassmorphism */}
+      {/* Right panel with Sleek Dark Glassmorphism */}
       <div className="auth-right" style={{
         position: 'relative',
         zIndex: 10,
-        margin: '24px 32px',
+        margin: 'auto 32px',
+        alignSelf: 'center',
+        maxHeight: 'calc(100vh - 48px)',
+        justifyContent: 'flex-start',
+        padding: '32px 36px',
         borderRadius: 24,
-        background: 'rgba(255, 255, 255, 0.96)',
+        background: 'linear-gradient(180deg, rgba(23, 21, 56, 0.95) 0%, rgba(13, 17, 34, 0.98) 100%)',
         backdropFilter: 'blur(30px)',
-        boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.6), 0 0 50px rgba(99, 102, 241, 0.2)',
-        border: '1px solid rgba(255, 255, 255, 0.8)',
+        boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.75), 0 0 50px rgba(99, 102, 241, 0.25)',
+        border: '1px solid rgba(167, 139, 250, 0.28)',
       }}>
         {/* Navigation back to landing page */}
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 12 }}>
           <button
             type="button"
             onClick={() => navigate('/')}
@@ -178,7 +182,7 @@ export default function LoginPage() {
               padding: 0,
               fontSize: 13,
               fontWeight: 600,
-              color: '#6366f1',
+              color: '#a78bfa',
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
@@ -191,71 +195,73 @@ export default function LoginPage() {
 
         {mode === 'login' ? (
           <>
-            <h2 className="auth-form-title" style={{ fontSize: 28, fontWeight: 800 }}>Welcome back</h2>
-            <p className="auth-form-sub" style={{ marginBottom: 20 }}>Sign in to your RecruitIQ account</p>
+            <h2 className="auth-form-title" style={{ fontSize: 28, fontWeight: 800, color: '#ffffff', margin: '0 0 4px 0' }}>Welcome back</h2>
+            <p className="auth-form-sub" style={{ margin: '0 0 20px 0', color: 'rgba(255, 255, 255, 0.68)' }}>Sign in to your RecruitIQ account</p>
 
             {error && <div className="alert alert-error" style={{ borderRadius: 12, marginBottom: 18 }}>{error}</div>}
 
             <form onSubmit={handleLogin}>
               <div className="form-group">
-                <label className="form-label">Email address</label>
+                <label className="form-label" style={{ color: '#e2e8f0', fontWeight: 600 }}>Email address</label>
                 <input className="form-input" type="email" placeholder="you@example.com" value={form.email} onChange={(e) => set('email', e.target.value)} required />
               </div>
               <div className="form-group">
-                <label className="form-label">Password</label>
+                <label className="form-label" style={{ color: '#e2e8f0', fontWeight: 600 }}>Password</label>
                 <input className="form-input" type="password" placeholder="••••••••" value={form.password} onChange={(e) => set('password', e.target.value)} required />
               </div>
 
               {/* Instant Demo Accounts Card placed below Email and Password */}
               <div style={{
-                margin: '16px 0 20px 0',
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                margin: '18px 0 22px 0',
+                background: 'rgba(99, 102, 241, 0.12)',
+                border: '1px solid rgba(167, 139, 250, 0.35)',
                 borderRadius: 14,
                 padding: '14px 16px',
-                boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)',
+                boxShadow: 'inset 0 1px 3px rgba(0, 0, 0, 0.25)',
               }}>
                 <div style={{
                   fontSize: 11,
                   fontWeight: 800,
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
-                  color: '#6366f1',
+                  color: '#a78bfa',
                   marginBottom: 10,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                 }}>
                   <span>⚡ Instant Demo Accounts</span>
-                  <span style={{ fontSize: 10, opacity: 0.7, textTransform: 'none', fontWeight: 600 }}>password: password123</span>
+                  <span style={{ fontSize: 10, opacity: 0.8, textTransform: 'none', fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>password: password123</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div
                     role="button"
                     tabIndex={0}
                     style={{
-                      background: '#ffffff',
+                      background: 'rgba(255, 255, 255, 0.08)',
                       padding: '10px 12px',
                       borderRadius: 10,
                       cursor: 'pointer',
-                      border: '1px solid #e2e8f0',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.14)',
+                      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)',
                       transition: 'all 0.2s ease',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#6366f1';
+                      e.currentTarget.style.borderColor = '#a78bfa';
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.14)';
                       e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 6px 14px rgba(99, 102, 241, 0.15)';
+                      e.currentTarget.style.boxShadow = '0 6px 14px rgba(167, 139, 250, 0.25)';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#e2e8f0';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.14)';
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
                       e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.03)';
+                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
                     }}
                     onClick={() => { set('email', 'sarah@techcorp.com'); set('password', 'password123'); }}
                   >
-                    <div style={{ fontSize: 11, color: '#4f46e5', fontWeight: 700 }}>👔 HR Recruiter</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 11, color: '#a78bfa', fontWeight: 700 }}>👔 HR Recruiter</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       sarah@techcorp.com
                     </div>
                   </div>
@@ -264,41 +270,47 @@ export default function LoginPage() {
                     role="button"
                     tabIndex={0}
                     style={{
-                      background: '#ffffff',
+                      background: 'rgba(255, 255, 255, 0.08)',
                       padding: '10px 12px',
                       borderRadius: 10,
                       cursor: 'pointer',
-                      border: '1px solid #e2e8f0',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.14)',
+                      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)',
                       transition: 'all 0.2s ease',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#6366f1';
+                      e.currentTarget.style.borderColor = '#38bdf8';
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.14)';
                       e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 6px 14px rgba(99, 102, 241, 0.15)';
+                      e.currentTarget.style.boxShadow = '0 6px 14px rgba(56, 189, 248, 0.25)';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#e2e8f0';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.14)';
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
                       e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.03)';
+                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
                     }}
                     onClick={() => { set('email', 'alex@gmail.com'); set('password', 'password123'); }}
                   >
-                    <div style={{ fontSize: 11, color: '#4f46e5', fontWeight: 700 }}>👤 Candidate</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 11, color: '#38bdf8', fontWeight: 700 }}>👤 Candidate</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       alex@gmail.com
                     </div>
                   </div>
                 </div>
               </div>
 
-              <button className="btn btn-primary btn-full btn-lg" type="submit" disabled={loading}>
+              <button className="btn btn-primary btn-full btn-lg" type="submit" disabled={loading} style={{
+                background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                boxShadow: '0 8px 24px -4px rgba(99, 102, 241, 0.6)',
+                fontWeight: 700,
+              }}>
                 {loading ? 'Signing in...' : 'Sign in →'}
               </button>
             </form>
 
-            <div className="auth-switch">
-              Don't have an account? <a onClick={() => { setMode('register'); setStep(1); }}>Create one free</a>
+            <div className="auth-switch" style={{ color: 'rgba(255, 255, 255, 0.65)' }}>
+              Don't have an account? <a onClick={() => { setMode('register'); setStep(1); }} style={{ color: '#a78bfa' }}>Create one free</a>
             </div>
           </>
         ) : (

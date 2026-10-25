@@ -544,19 +544,56 @@ tbody tr:last-child { border-bottom: none; }
 
 .auth-right {
   width: 480px;
-  background: white;
-  display: flex; flex-direction: column; justify-content: center;
-  padding: 48px;
+  background: rgba(15, 23, 42, 0.94);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 36px 40px;
   overflow-y: auto;
 }
-.auth-form-title { font-size: 26px; font-weight: 800; color: var(--text); margin-bottom: 6px; letter-spacing: -0.02em; }
-.auth-form-sub { font-size: 14px; color: var(--text-muted); margin-bottom: 32px; }
+.auth-form-title { font-size: 26px; font-weight: 800; color: #ffffff; margin-bottom: 6px; letter-spacing: -0.02em; }
+.auth-form-sub { font-size: 14px; color: rgba(255, 255, 255, 0.65); margin-bottom: 24px; }
 .auth-divider { text-align: center; position: relative; margin: 20px 0; }
-.auth-divider::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--border); }
-.auth-divider span { position: relative; background: white; padding: 0 12px; color: var(--text-muted); font-size: 12px; }
-.auth-switch { text-align: center; margin-top: 20px; font-size: 13px; color: var(--text-muted); }
-.auth-switch a { color: var(--primary); font-weight: 600; cursor: pointer; text-decoration: none; }
+.auth-divider::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+.auth-divider span { position: relative; background: #0f172a; padding: 0 12px; color: rgba(255, 255, 255, 0.6); font-size: 12px; }
+.auth-switch { text-align: center; margin-top: 20px; font-size: 13px; color: rgba(255, 255, 255, 0.65); }
+.auth-switch a { color: #a78bfa; font-weight: 600; cursor: pointer; text-decoration: none; }
 .auth-switch a:hover { text-decoration: underline; }
+.auth-right .form-label {
+  color: #e2e8f0;
+}
+.auth-right .form-input,
+.auth-right .form-select,
+.auth-right .form-textarea {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+.auth-right .form-input:focus,
+.auth-right .form-select:focus,
+.auth-right .form-textarea:focus {
+  border-color: #818cf8;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+.auth-right .form-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+.auth-right .role-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.auth-right .role-card-title {
+  color: #ffffff;
+}
+.auth-right .role-card-sub {
+  color: rgba(255, 255, 255, 0.65);
+}
+.auth-right .role-card:hover,
+.auth-right .role-card.selected {
+  border-color: #818cf8;
+  background: rgba(99, 102, 241, 0.2);
+}
 .role-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
 .role-card {
   border: 2px solid var(--border); border-radius: var(--radius);
