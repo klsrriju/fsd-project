@@ -1,12 +1,50 @@
 # SkillProof – AI-Powered Recruitment & Skill Verification Platform
 
-SkillProof is an AI-powered talent acquisition and verification platform that matches candidates to job positions based on verified skills, practical project demonstrations, assessments, and transparent multi-factor matching.
+SkillProof is a modern AI-powered talent acquisition and skill verification platform that matches candidates to job positions based on verified skills, portfolio evidence, practical coding assessments, and transparent multi-factor matching.
+
+---
+
+## 🌟 Key Features & Capabilities
+
+### 1. 🤖 AI-Powered Evaluation & Google Gemini Integration
+- **Transparent Multi-Factor Matching Algorithm:**
+  $$\text{Match Score} = 0.45 \times \text{Skills} + 0.20 \times \text{Requirements} + 0.20 \times \text{Experience} + 0.15 \times \text{Education}$$
+- **Resume Skill Extraction & Gap Analysis:** Automatic skill parsing with customized action plans to bridge missing competencies.
+- **AI Behavioral STAR Evaluator:** Analyzes behavioral interview responses with actionable suggestions using Google Gemini AI or semantic fallback.
+
+### 2. 💻 Technical Coding Interview Preparation & Real Test Mode
+- LeetCode-style problem suite categorized into **Easy**, **Medium**, and **Hard**.
+- In-browser code runner supporting **Python, JavaScript, TypeScript, Java, and C++**.
+- Logic and algorithmic analysis that reviews time complexity, edge cases, and provides targeted optimization tips.
+- Real-time test simulator with progress tracking and submission history.
+
+### 3. 🏅 Verified Achievements & Multi-Category Certificate Uploads
+- Support for uploading certificate documents (PDF/PNG/JPG up to 25MB).
+- Built-in classification into:
+  - 🏆 **Hackathons & Competitions**
+  - 🎓 **Learning & Course Certifications**
+  - 💼 **Professional & Industry Certifications**
+  - 📜 **Workshops & Honors**
+- Embedded in-app document previewer and instant verification evidence.
+
+### 4. 📲 Automated WhatsApp & SMS Candidate Notifications
+- Automated notifications dispatched directly to candidate mobile numbers upon pipeline stage transitions:
+  - ⭐ **Shortlisted:** Congratulatory alert with portal deep link.
+  - 📅 **Interview Scheduled:** Exact date and time preservation (no timezone skew), mode, and meeting URL (`Google Meet` / `Zoom`).
+  - ❌ **Rejection:** Professional update preserving candidate profile in active talent pool with feedback invitation.
+  - 🎉 **Job Offer & Hired:** Congratulatory offer and onboarding messages.
+- **Universal Click-to-Chat WhatsApp links** (`https://wa.me/...`) for instant recruiter-candidate communication.
+
+### 5. 📊 Real-Time HR Pipeline & Live Synchronization
+- **Kanban & List Pipeline Views:** Drag-and-drop or one-click status transitions across 7 stages (`applied`, `shortlisted`, `interview_scheduled`, `interviewed`, `offered`, `hired`, `rejected`).
+- **Live Candidate Updates Feed:** Whenever candidates update skills, upload new certificates, or modify their experience, changes immediately sync and re-rank candidate match scores on the HR dashboard.
+- Rejection feedback request and response loop between candidates and recruiters.
 
 ---
 
 ## 🚀 Quick Start Commands
 
-Run these commands from the repository root (`D:/FSD/fsd project`):
+Run these commands from the repository root:
 
 ### 1. Install Dependencies
 ```bash
@@ -34,7 +72,7 @@ node apps/backend/dist/server.js
 npm run dev --workspace @recruitment-platform/frontend
 ```
 
-- **Frontend URL:** [http://localhost:5173](http://localhost:5173)
+- **Frontend Application:** [http://localhost:5173](http://localhost:5173)
 - **Backend API:** [http://localhost:3001/api/v1](http://localhost:3001/api/v1)
 - **Health Check:** [http://localhost:3001/api/v1/health](http://localhost:3001/api/v1/health)
 
@@ -48,6 +86,7 @@ All demo accounts use password: `password123`
 |------|-------|------|-------|
 | **HR / Recruiter** | `sarah@techcorp.com` | Sarah Mitchell | TechCorp Solutions (Engineering) |
 | **HR / Recruiter** | `james@innovate.io` | James Patel | Innovate.io (Fintech) |
+| **Candidate** | `krijutom3@gmail.com` | Kriju Tom | Data Scientist & ML Researcher |
 | **Candidate** | `alex@gmail.com` | Alex Johnson | Full Stack Developer |
 | **Candidate** | `priya@gmail.com` | Priya Sharma | Data Scientist & ML |
 | **Candidate** | `marcus@gmail.com` | Marcus Williams | DevOps & Cloud Engineer |
@@ -73,84 +112,72 @@ MONGODB_URI=mongodb+srv://<username>:<db_password>@cluster0.xxxxx.mongodb.net/fs
 REDIS_HOST=localhost
 REDIS_PORT=6379
 
-# GitHub OAuth (Phase 6)
-GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
+# Google Gemini AI (AI Matching, STAR behavioral evaluations, code reviews)
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# GitHub OAuth Integration
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
 GITHUB_CALLBACK_URL=http://localhost:3001/api/v1/auth/github/callback
 
-# Twilio SMS Service (Phase 8)
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-TWILIO_FROM_NUMBER=
+# Twilio SMS / WhatsApp Service
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_FROM_NUMBER=your_twilio_phone_number
 ```
 
 ---
 
-## 🍃 MongoDB Atlas Setup & IP Whitelist Guide
+## 🍃 Database Architecture & Data Models
 
-The application connects to MongoDB Atlas using Mongoose with resilient fallback:
+The platform operates on **MongoDB Atlas** with an automatic in-memory fallback store:
 
-1. Log into your [MongoDB Atlas Dashboard](https://cloud.mongodb.com).
-2. Select your project and cluster.
-3. In the left navigation, click **Network Access** under **Security**.
-4. Click **Add IP Address**.
-5. Choose one of the following:
-   - **Recommended for development:** Click **Add Current IP Address** to whitelist your workstation IP.
-   - **Unrestricted development access:** Click **Allow Access from Anywhere** (`0.0.0.0/0`).
-6. Click **Confirm**. Wait 1–2 minutes for the changes to deploy across the cluster.
-7. Restart the backend server. The startup log will switch from `In-Memory Demo Mode` to `✅ Connected to MongoDB Atlas (fsdproject)`.
-
-*Note:* When the client IP is not yet whitelisted, the system automatically runs in high-resilience **In-Memory Demo Mode** so that testing and development can proceed without downtime or crashes.
+- **User:** Authentication, roles (`hr` | `candidate`), profile fields, multi-category achievement evidence, coding assessment progress, and notification preferences.
+- **Job:** Sourced from internal HR postings or external connectors with requirement lists and skills.
+- **Application:** Candidate-to-job pairing with dynamic match scores, matched/missing skill arrays, resume feedback, and rejection-explanation feedback lifecycles.
+- **Interview:** Application-linked scheduling holding exact date/time, meeting links, video platforms, and recruiter notes.
+- **Notification:** Real-time in-app alerts mapped to frontend routing.
 
 ---
 
-## 🐙 GitHub Account Integration (OAuth)
+## 🐙 Integrations & Connectors
 
-1. Go to [GitHub Developer Settings](https://github.com/settings/developers) > **OAuth Apps** > **New OAuth App**.
-2. Set:
-   - **Application name:** `SkillProof Platform`
-   - **Homepage URL:** `http://localhost:5173`
-   - **Authorization callback URL:** `http://localhost:3001/api/v1/auth/github/callback`
-3. Generate a Client Secret and copy both `Client ID` and `Client Secret` to `apps/backend/.env`.
-4. In the candidate profile, click **Connect via GitHub OAuth**. Your public repositories, primary programming languages, and followers will be imported into your Skill Passport.
-5. Candidates can disconnect anytime using the **Disconnect** button.
-6. *Instant alternative:* Candidates can also enter their GitHub username directly to synchronize public skill signals without requiring OAuth credentials.
+### GitHub Sync & OAuth
+- Public repository scanning, primary language detection, and follower stats.
+- Connect via official GitHub OAuth or instant direct username sync.
 
----
+### Unstop Verification & Evidence
+- Unstop username synchronization for competitive programming and contest stats.
+- Direct PDF/image certificate evidence upload with categorical tagging.
 
-## 🎯 Unstop Account Integration
-
-1. Unstop does not offer a public OAuth endpoint for third-party platforms.
-2. SkillProof provides an honest, transparent alternative:
-   - **Username Sync:** Candidates link their Unstop username to track public contest badges and competitions.
-   - **Voluntary Evidence Submission:** Candidates can submit specific certificates, contest rankings, and hackathon awards via the **Add Certificate / Proof** modal.
-   - **Transparency:** All self-submitted awards are explicitly badged as `Self-Reported` to employers, preventing unverified claims while allowing candidates to demonstrate their credentials.
+### Communication (WhatsApp & Twilio SMS)
+- Automated triggers on interview assignment, shortlisting, and rejections.
+- Deduplication safety buffer preventing duplicate messages within 5 minutes.
+- Development fallback safely logs full message payloads and direct click-to-chat links in console when Twilio credentials are not set.
 
 ---
 
-## 📱 SMS Notifications (Twilio)
+## 📂 Project Architecture
 
-1. Sign up for a [Twilio Account](https://www.twilio.com).
-2. Copy your **Account SID**, **Auth Token**, and assigned **Twilio Phone Number** into `apps/backend/.env`.
-3. Candidate SMS flow:
-   - Candidates enter their mobile number in their profile and check the explicit consent checkbox.
-   - Candidates can toggle preferences for:
-     * 📅 Interview invitations & schedule changes
-     * 📊 Application status updates & job offers
-     * 💬 Rejection feedback responses from HR
-     * 🎯 Future job availability alerts for rejected candidates
-4. *Safe Development Fallback:* If Twilio credentials are not configured, all SMS dispatches are safely simulated and logged in the terminal with full message context, without throwing errors or blocking in-app notifications.
-
----
-
-## 🤖 AI Resume Analyser & Multi-Factor Matching
-
-The AI analyser (`/resume-analyzer`) provides transparent, explainable evaluations:
-- **Factor Weights:**
-  - 45% Core Skills Match
-  - 20% Requirements Alignment
-  - 20% Experience Signals
-  - 15% Education Foundation
-- **Skill-Gap Analysis:** Lists confirmed matched skills alongside missing skills.
-- **Action Plan:** Prioritizes high-impact learning recommendations to close identified skill gaps.
-- **No Blind Rejections:** The AI score is strictly informational and assistive; candidates are never automatically rejected based on an algorithmic score alone.
+```
+fsd-project/
+├── apps/
+│   ├── backend/
+│   │   ├── src/
+│   │   │   ├── config/       # Database, Redis, and environment configs
+│   │   │   ├── db/           # MongoDB Atlas seeding & fallback store
+│   │   │   ├── models/       # Mongoose schemas (User, Job, Application, Interview, Notification)
+│   │   │   ├── routes/       # REST API endpoints (v1.ts)
+│   │   │   ├── services/     # AI, Gemini, SMS, resume parser, and coding evaluators
+│   │   │   └── server.ts     # Express server setup & middleware
+│   │   └── tsconfig.json
+│   └── frontend/
+│       ├── src/
+│       │   ├── context/      # AuthContext and state providers
+│       │   ├── pages/        # Dashboard, Kanban, Profile, Coding Prep, Interview, Resume pages
+│       │   ├── api.ts        # Axios API client & endpoints
+│       │   └── styles.css    # Responsive theme & 3D styling
+│       └── vite.config.ts
+├── package.json
+└── README.md
+```
