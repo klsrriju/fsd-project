@@ -103,7 +103,7 @@ export default function LoginPage() {
 
       {/* Left panel */}
       <div className="auth-left" style={{ position: 'relative', zIndex: 10 }}>
-        <div className="auth-logo">
+        <div className="auth-logo" onClick={() => navigate('/')} style={{ cursor: 'pointer' }} title="Back to Home">
           <div className="auth-logo-icon" style={{
             background: 'linear-gradient(135deg, #6366f1, #a855f7)',
             boxShadow: '0 8px 24px -4px rgba(99, 102, 241, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.3)',
@@ -154,51 +154,6 @@ export default function LoginPage() {
             </div>
           ))}
         </div>
-
-        {/* Demo credentials */}
-        <div style={{
-          marginTop: 32,
-          background: 'rgba(255, 255, 255, 0.06)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          backdropFilter: 'blur(16px)',
-          borderRadius: 16,
-          padding: '18px 24px',
-          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.25)',
-        }}>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#a78bfa', marginBottom: 12 }}>
-            ⚡ Instant Demo Accounts (password: password123)
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                padding: '10px 14px',
-                borderRadius: 10,
-                cursor: 'pointer',
-                border: '1px solid rgba(255,255,255,0.08)',
-                transition: 'all 0.2s',
-              }}
-              onClick={() => { set('email', 'sarah@techcorp.com'); set('password', 'password123'); }}
-            >
-              <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 700 }}>👔 HR Recruiter</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'white', marginTop: 2 }}>sarah@techcorp.com</div>
-            </div>
-            <div
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                padding: '10px 14px',
-                borderRadius: 10,
-                cursor: 'pointer',
-                border: '1px solid rgba(255,255,255,0.08)',
-                transition: 'all 0.2s',
-              }}
-              onClick={() => { set('email', 'alex@gmail.com'); set('password', 'password123'); }}
-            >
-              <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 700 }}>👤 Candidate</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'white', marginTop: 2 }}>alex@gmail.com</div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Right panel with 3D Glassmorphism */}
@@ -212,10 +167,32 @@ export default function LoginPage() {
         boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.6), 0 0 50px rgba(99, 102, 241, 0.2)',
         border: '1px solid rgba(255, 255, 255, 0.8)',
       }}>
+        {/* Navigation back to landing page */}
+        <div style={{ marginBottom: 16 }}>
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#6366f1',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            ← Back to Home
+          </button>
+        </div>
+
         {mode === 'login' ? (
           <>
             <h2 className="auth-form-title" style={{ fontSize: 28, fontWeight: 800 }}>Welcome back</h2>
-            <p className="auth-form-sub" style={{ marginBottom: 24 }}>Sign in to your RecruitIQ account</p>
+            <p className="auth-form-sub" style={{ marginBottom: 20 }}>Sign in to your RecruitIQ account</p>
 
             {error && <div className="alert alert-error" style={{ borderRadius: 12, marginBottom: 18 }}>{error}</div>}
 
@@ -228,20 +205,97 @@ export default function LoginPage() {
                 <label className="form-label">Password</label>
                 <input className="form-input" type="password" placeholder="••••••••" value={form.password} onChange={(e) => set('password', e.target.value)} required />
               </div>
+
+              {/* Instant Demo Accounts Card placed below Email and Password */}
+              <div style={{
+                margin: '16px 0 20px 0',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 14,
+                padding: '14px 16px',
+                boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)',
+              }}>
+                <div style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: '#6366f1',
+                  marginBottom: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                  <span>⚡ Instant Demo Accounts</span>
+                  <span style={{ fontSize: 10, opacity: 0.7, textTransform: 'none', fontWeight: 600 }}>password: password123</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    style={{
+                      background: '#ffffff',
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      cursor: 'pointer',
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#6366f1';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 6px 14px rgba(99, 102, 241, 0.15)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#e2e8f0';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.03)';
+                    }}
+                    onClick={() => { set('email', 'sarah@techcorp.com'); set('password', 'password123'); }}
+                  >
+                    <div style={{ fontSize: 11, color: '#4f46e5', fontWeight: 700 }}>👔 HR Recruiter</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      sarah@techcorp.com
+                    </div>
+                  </div>
+
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    style={{
+                      background: '#ffffff',
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      cursor: 'pointer',
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#6366f1';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 6px 14px rgba(99, 102, 241, 0.15)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#e2e8f0';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.03)';
+                    }}
+                    onClick={() => { set('email', 'alex@gmail.com'); set('password', 'password123'); }}
+                  >
+                    <div style={{ fontSize: 11, color: '#4f46e5', fontWeight: 700 }}>👤 Candidate</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      alex@gmail.com
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <button className="btn btn-primary btn-full btn-lg" type="submit" disabled={loading}>
                 {loading ? 'Signing in...' : 'Sign in →'}
               </button>
             </form>
-
-            <div className="auth-divider"><span>or try a demo account</span></div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-ghost btn-full" onClick={() => { set('email', 'sarah@techcorp.com'); set('password', 'password123'); }}>
-                👔 HR Demo
-              </button>
-              <button className="btn btn-ghost btn-full" onClick={() => { set('email', 'alex@gmail.com'); set('password', 'password123'); }}>
-                👤 Candidate Demo
-              </button>
-            </div>
 
             <div className="auth-switch">
               Don't have an account? <a onClick={() => { setMode('register'); setStep(1); }}>Create one free</a>
