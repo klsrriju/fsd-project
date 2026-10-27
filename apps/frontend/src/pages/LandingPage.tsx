@@ -493,7 +493,7 @@ export default function LandingPage() {
           <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: '-0.02em' }}>Skill<span style={{ color: '#a78bfa' }}>Proof</span></span>
         </div>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)' }}>
-          AI-Powered Recruitment Platform • Built with Gemini AI, React, Node.js & MongoDB Atlas
+          SkillProof: AI-Enabled Recruitment and Skill Verification Platform • Built with Gemini AI, React, Node.js & MongoDB Atlas
         </div>
         <button
           onClick={() => navigate('/login')}

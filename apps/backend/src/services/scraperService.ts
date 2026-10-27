@@ -44,11 +44,11 @@ export async function scrapeGitHubProfile(username: string) {
   try {
     const cleanUser = username.trim().replace(/^@/, '');
     const userRes = await axios.get(`https://api.github.com/users/${cleanUser}`, {
-      headers: { 'User-Agent': 'RecruitIQ-Platform' },
+      headers: { 'User-Agent': 'SkillProof-Platform' },
       timeout: 5000,
     });
     const reposRes = await axios.get(`https://api.github.com/users/${cleanUser}/repos?sort=updated&per_page=10`, {
-      headers: { 'User-Agent': 'RecruitIQ-Platform' },
+      headers: { 'User-Agent': 'SkillProof-Platform' },
       timeout: 5000,
     });
 

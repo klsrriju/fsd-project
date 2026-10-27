@@ -108,8 +108,10 @@ export default function LoginPage() {
             background: 'linear-gradient(135deg, #6366f1, #a855f7)',
             boxShadow: '0 8px 24px -4px rgba(99, 102, 241, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.3)',
             transform: 'rotate(-4deg)',
-          }}>R</div>
-          <span className="auth-logo-text" style={{ letterSpacing: '-0.02em', fontSize: 24, fontWeight: 800 }}>RecruitIQ</span>
+          }}>S</div>
+          <span className="auth-logo-text" style={{ letterSpacing: '-0.02em', fontSize: 24, fontWeight: 800 }}>
+            Skill<span style={{ color: '#a78bfa' }}>Proof</span>
+          </span>
         </div>
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
@@ -196,7 +198,7 @@ export default function LoginPage() {
         {mode === 'login' ? (
           <>
             <h2 className="auth-form-title" style={{ fontSize: 28, fontWeight: 800, color: '#ffffff', margin: '0 0 4px 0' }}>Welcome back</h2>
-            <p className="auth-form-sub" style={{ margin: '0 0 20px 0', color: 'rgba(255, 255, 255, 0.68)' }}>Sign in to your RecruitIQ account</p>
+            <p className="auth-form-sub" style={{ margin: '0 0 20px 0', color: 'rgba(255, 255, 255, 0.68)' }}>Sign in to your SkillProof account</p>
 
             {error && <div className="alert alert-error" style={{ borderRadius: 12, marginBottom: 18 }}>{error}</div>}
 
@@ -316,7 +318,7 @@ export default function LoginPage() {
         ) : (
           <>
             <h2 className="auth-form-title">Create account</h2>
-            <p className="auth-form-sub">Join RecruitIQ — {step === 1 ? 'Choose your role' : step === 2 ? 'Basic details' : 'Profile details'}</p>
+            <p className="auth-form-sub">Join SkillProof — {step === 1 ? 'Choose your role' : step === 2 ? 'Basic details' : 'Profile details'}</p>
 
             {error && <div className="alert alert-error">{error}</div>}
 

@@ -70,9 +70,9 @@ function Sidebar() {
   return (
     <div className="sidebar">
       <div className="sidebar-brand">
-        <div className="sidebar-brand-icon">R</div>
+        <div className="sidebar-brand-icon">S</div>
         <div>
-          <div className="sidebar-brand-text">RecruitIQ</div>
+          <div className="sidebar-brand-text">Skill<span style={{ color: '#a78bfa' }}>Proof</span></div>
           <div className="sidebar-brand-sub">{isHR ? 'HR Portal' : 'Talent Portal'}</div>
         </div>
       </div>
@@ -133,7 +133,7 @@ function Topbar() {
     '/profile': ['Account', 'My Profile'],
   };
 
-  const [breadcrumb, title] = titles[location.pathname] || ['', 'RecruitIQ'];
+  const [breadcrumb, title] = titles[location.pathname] || ['', 'SkillProof'];
 
   return (
     <div className="topbar">

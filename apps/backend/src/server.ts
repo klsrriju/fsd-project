@@ -19,7 +19,7 @@ app.get('/', (_req, res) => {
   const db = getDbStatus();
   res.json({
     success: true,
-    message: 'SkillProof Recruitment Platform API',
+    message: 'SkillProof: AI-Enabled Recruitment and Skill Verification Platform API',
     version: '1.0.0',
     database: db.connected ? 'MongoDB Atlas (Connected)' : 'In-Memory Demo Mode',
   });

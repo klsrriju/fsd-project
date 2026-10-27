@@ -1,4 +1,4 @@
-# SkillProof – AI-Powered Recruitment & Skill Verification Platform
+# SKILLPROOF: AI-ENABLED RECRUITMENT AND SKILL VERIFICATION PLATFORM
 
 SkillProof is a modern AI-powered talent acquisition and skill verification platform that matches candidates to job positions based on verified skills, portfolio evidence, practical coding assessments, and transparent multi-factor matching.
 
